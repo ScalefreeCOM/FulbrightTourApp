@@ -29,7 +29,7 @@ policymaking.
 
 Past delegations have had the privilege of meeting, among others:
 
-- **Grand Duke Henri of Luxembourg**
+- **Former Grand Duke Henri of Luxembourg**
 - **[Radmila Šekerinska](https://www.linkedin.com/in/radmila-sekerinska-474283a/)**, Deputy Secretary General of NATO, former Deputy Prime Minister and Minister of Defence of North Macedonia
 - **Dr. Heike Peitsch**, German Ambassador to Luxembourg
 - **Tamas Ivan Kovacs**, Ambassador of Hungary to Belgium and Luxembourg
@@ -37,8 +37,8 @@ Past delegations have had the privilege of meeting, among others:
   and the **European Public Prosecutor's Office**
 
 <p align="center">
-  <img src="docs/images/tour-grand-duke-henri.jpg" alt="Dr. György Kovács in conversation with Grand Duke Henri of Luxembourg" width="80%"><br>
-  <em><a href="https://www.linkedin.com/in/gyorgykovacs/">Dr. György Kovács</a> in conversation with Grand Duke Henri of Luxembourg</em>
+  <img src="docs/images/tour-grand-duke-henri.jpg" alt="Dr. György Kovács in conversation with former Grand Duke Henri of Luxembourg" width="80%"><br>
+  <em><a href="https://www.linkedin.com/in/gyorgykovacs/">Dr. György Kovács</a> in conversation with former Grand Duke Henri of Luxembourg</em>
 </p>
 
 <p align="center">
