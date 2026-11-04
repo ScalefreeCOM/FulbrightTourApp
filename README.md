@@ -10,7 +10,10 @@ passport data after the tour — with Salesforce as the shared memory of the tea
 
 <p align="center">
   <img src="docs/images/tour-group-berlaymont.jpg" alt="Study tour delegation in front of the Berlaymont building of the European Commission in Brussels" width="49%">
-  <img src="docs/images/tour-european-parliament.jpg" alt="Briefing of the delegation at the European Parliament" width="49%">
+  <img src="docs/images/tour-european-parliament.jpg" alt="Dóra Dávid, Member of the European Parliament, briefing the delegation" width="49%"><br>
+  <em>Left: the delegation in front of the Berlaymont building of the European Commission. Right:
+  <a href="https://www.linkedin.com/in/doradavid/">Dóra Dávid</a>, Member of the European Parliament,
+  briefs the Fulbright alumni on the Parliament's role as co-legislator.</em>
 </p>
 
 In an era defined by rapid geopolitical shifts, fostering a robust transatlantic dialogue is more critical than
@@ -35,7 +38,7 @@ Past delegations have had the privilege of meeting, among others:
 
 <p align="center">
   <img src="docs/images/tour-nato-sekerinska.jpg" alt="Radmila Šekerinska and Michael Olschimke at NATO Headquarters" width="45%"><br>
-  <em>Radmila Šekerinska, Deputy Secretary General of NATO, with organizer Michael Olschimke at NATO Headquarters in Brussels</em>
+  <em>Radmila Šekerinska, Deputy Secretary General of NATO, with organizer <a href="https://www.linkedin.com/in/olschimke/">Michael Olschimke</a> at NATO Headquarters in Brussels</em>
 </p>
 
 By sharing these firsthand experiences on social media, the impact of each tour reaches far beyond the delegation
@@ -60,14 +63,14 @@ If your institution would like to welcome a Fulbright delegation, the organizers
 visitor side: one point of contact, a confirmed list of attendees **in your own registration form** and by your
 deadline, and the deletion of the attendees' identity data after the tour.
 
-**Organizers:** Dr. György Kovács (Hungarian Fulbright Association; Board Member, European Network of American
-Alumni Associations) and Michael Olschimke (German Fulbright Alumni Association).
+**Organizers:** [Dr. György Kovács](https://www.linkedin.com/in/gyorgykovacs/) (Hungarian Fulbright Association; Board Member, European Network of American
+Alumni Associations) and [Michael Olschimke](https://www.linkedin.com/in/olschimke/) (German Fulbright Alumni Association).
 
 **Contact:** [michael.olschimke@fulbrightmail.org](mailto:michael.olschimke@fulbrightmail.org)
 
 <p align="center">
   <img src="docs/images/tour-organizers-hungarian-embassy.jpg" alt="Dr. György Kovács and Michael Olschimke at the Embassy of Hungary in Brussels" width="35%"><br>
-  <em>The organizers Dr. György Kovács (left) and Michael Olschimke at the Embassy of Hungary in Brussels</em>
+  <em>The organizers <a href="https://www.linkedin.com/in/gyorgykovacs/">Dr. György Kovács</a> (left) and <a href="https://www.linkedin.com/in/olschimke/">Michael Olschimke</a> at the Embassy of Hungary in Brussels</em>
 </p>
 
 ---
