@@ -70,18 +70,14 @@ Alumni Associations) and Michael Olschimke (German Fulbright Alumni Association)
   <img src="docs/images/partner-hungarian-fulbright-association.png" alt="Hungarian Fulbright Association" height="58">
   &nbsp;&nbsp;&nbsp;
   <img src="docs/images/partner-enam.png" alt="ENAM – European Network of American Alumni Associations" height="52">
+  &nbsp;&nbsp;&nbsp;
+  <a href="https://www.scalefree.com"><picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/scalefree-logo-white.png">
+    <img src="docs/images/scalefree-logo.png" alt="Scalefree" height="52">
+  </picture></a>
 </p>
 
 ## Built and maintained by Scalefree
-
-<p>
-  <a href="https://www.scalefree.com">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/images/scalefree-logo-white.png">
-    <img src="docs/images/scalefree-logo.png" alt="Scalefree" height="60">
-  </picture>
-  </a>
-</p>
 
 <p align="center">
   <img src="docs/images/tour-panel-discussion.jpg" alt="Panel discussion during a European Fulbright Study Tour, with a Scalefree banner" width="80%">
