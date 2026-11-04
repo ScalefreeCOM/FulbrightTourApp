@@ -305,7 +305,7 @@ struct MonitoringPanel: View {
                         }
                     }
                     .padding(12).frame(maxWidth: .infinity, alignment: .leading)
-                    .glassPanel(cornerRadius: 14, tint: Theme.usRed.opacity(0.35))
+                    .insetPanel(cornerRadius: 14, tint: Theme.usRed.opacity(0.4))
                 }
 
                 if let next {
@@ -315,7 +315,7 @@ struct MonitoringPanel: View {
                         Text(next.start.formatted(.dateTime.weekday(.abbreviated).day().month().hour().minute())).font(.caption).opacity(0.8)
                     }
                     .padding(12).frame(maxWidth: .infinity, alignment: .leading)
-                    .glassPanel(cornerRadius: 14)
+                    .insetPanel(cornerRadius: 14)
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
@@ -326,7 +326,7 @@ struct MonitoringPanel: View {
                     if let s = state.lastScan { Text("Inbox scanned \(s.formatted(date: .omitted, time: .shortened))").font(.caption2).opacity(0.6) }
                 }
                 .padding(12).frame(maxWidth: .infinity, alignment: .leading)
-                .glassPanel(cornerRadius: 14)
+                .insetPanel(cornerRadius: 14)
             }
             .padding(14)
         }
@@ -359,7 +359,7 @@ struct Metric: View {
         .foregroundStyle(.white)
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassPanel(cornerRadius: 14, tint: tint.opacity(0.35))
+        .insetPanel(cornerRadius: 14, tint: tint.opacity(0.4))
     }
 }
 

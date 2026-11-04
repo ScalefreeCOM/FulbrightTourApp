@@ -6,6 +6,8 @@ import StudyToursCore
 enum Theme {
     // USA — Old Glory
     static let usNavy = Color(red: 10/255, green: 49/255, blue: 97/255)        // #0A3161
+    /// Default tint of glass panels — light enough that the artwork shows through.
+    static let glassTint = usNavy.opacity(0.5)
     static let usRed = Color(red: 179/255, green: 25/255, blue: 66/255)        // #B31942
     // Fulbright Visual Identity Standards — primary palette
     static let fbBlue = Color(red: 0/255, green: 61/255, blue: 165/255)        // Legacy Blue #003DA5
@@ -122,7 +124,7 @@ struct FulbrightHeader: View {
         .foregroundStyle(.white)
         .padding(.horizontal, 22).padding(.vertical, 16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassPanel(cornerRadius: 22, tint: Theme.fbBlue.opacity(0.9))
+        .glassPanel(cornerRadius: 22, tint: Theme.fbBlue.opacity(0.6))
     }
 }
 
@@ -131,19 +133,26 @@ struct FulbrightHeader: View {
 extension View {
     @ViewBuilder
     func glassPanel(cornerRadius: CGFloat = 18, tint: Color? = nil) -> some View {
-        // Default navy tint keeps text legible over the detailed background artwork.
-        // Strong navy tint: white text stays readable on the light background.
-        let tint = tint ?? Theme.usNavy.opacity(0.85)
+        // Light navy tint: the artwork still shows through the glass, white text stays readable.
+        let tint = tint ?? Theme.glassTint
         if Snapshot.active {
             // Offscreen snapshots can't capture Liquid Glass; draw an opaque stand-in to review layout and contrast.
             self.background(tint, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                 .background(Theme.usNavy.opacity(0.55), in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         } else if #available(macOS 26.0, *) {
-            self.glassEffect(Glass.regular.tint(tint), in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            // .clear = see-through Liquid Glass (.regular is frosted and hides the artwork)
+            self.glassEffect(Glass.clear.tint(tint), in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         } else {
             self.background(tint, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         }
+    }
+
+    /// For elements that sit *inside* a glass panel (tiles, sub-sections). Glass on glass renders flat,
+    /// so nested elements use a translucent fill with a fine edge instead.
+    func insetPanel(cornerRadius: CGFloat = 14, tint: Color? = nil) -> some View {
+        self.background(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).fill(tint ?? .white.opacity(0.08)))
+            .overlay(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).strokeBorder(.white.opacity(0.14), lineWidth: 0.5))
     }
 
     @ViewBuilder
