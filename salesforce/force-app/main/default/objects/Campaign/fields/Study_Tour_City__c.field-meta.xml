@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Study_Tour_City__c</fullName>
+    <label>Study Tour City</label>
+    <description>City or region of the study tour. Maintained by the Fulbright Study Tours app.</description>
+    <inlineHelpText>City or region the study tour visits, e.g. Brussels.</inlineHelpText>
+    <type>Text</type>
+    <length>80</length>
+    <required>false</required>
+    <unique>false</unique>
+    <externalId>false</externalId>
+    <trackHistory>false</trackHistory>
+</CustomField>

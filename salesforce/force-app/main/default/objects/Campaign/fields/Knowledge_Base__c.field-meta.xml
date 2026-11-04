@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Knowledge_Base__c</fullName>
+    <label>Knowledge Base</label>
+    <description>Google Doc with the facts the email assistant may use when answering attendees. Defaults to the shared knowledge base for all study tours; set a program-specific document if needed.</description>
+    <inlineHelpText>Google Doc the email assistant uses to answer attendee questions. Defaults to the shared knowledge base.</inlineHelpText>
+    <defaultValue>&quot;__KNOWLEDGE_BASE_URL__&quot;</defaultValue>
+    <type>Url</type>
+    <required>false</required>
+    <externalId>false</externalId>
+    <trackHistory>false</trackHistory>
+</CustomField>

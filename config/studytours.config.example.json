@@ -1,0 +1,8 @@
+{
+  "salesforceURL": "https://your-domain.my.salesforce.com",
+  "salesforceConsumerKey": "consumer key of your Salesforce External Client App",
+  "googleClientId": "your-client-id.apps.googleusercontent.com",
+  "driveParentFolderId": "ID of the shared Google Drive folder that holds one folder per study tour",
+  "agendaTemplateId": "ID of the Google Slides agenda template",
+  "knowledgeBaseURL": "https://docs.google.com/document/d/your-knowledge-base-doc-id/edit"
+}

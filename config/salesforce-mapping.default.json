@@ -1,0 +1,72 @@
+{
+  "_comment" : "Copy to salesforce-mapping.json and change only what differs in your org. Keys starting with _ are ignored.",
+  "contact" : {
+    "greeting" : "Greeting__c"
+  },
+  "hostVisit" : {
+    "listDeadline" : "List_Deadline__c",
+    "recipient" : "Attendee_List_Recipient__c",
+    "recipientRelationship" : "Attendee_List_Recipient__r",
+    "stageConfirmed" : "Closed Won",
+    "stageDeclined" : "Closed Lost",
+    "stageIdentified" : "Qualification",
+    "stageLetterSent" : "Needs Analysis",
+    "stagesInDiscussion" : [
+      "Proposal",
+      "Negotiation"
+    ],
+    "visitEnd" : "Visit_End__c",
+    "visitStart" : "Visit_Start__c"
+  },
+  "member" : {
+    "birthDate" : "Birth_Date__c",
+    "dietary" : "Dietary_Needs__c",
+    "email" : "Email",
+    "emergencyContact" : "Emergency_Contact_Name__c",
+    "emergencyPhone" : "Emergency_Contact_Phone__c",
+    "firstName" : "FirstName",
+    "identificationType" : "Identification_Type__c",
+    "idTypeIdCardValue" : "National\/Personal ID card",
+    "idTypePassportValue" : "Passport",
+    "lastName" : "LastName",
+    "leadSource" : "LeadSource",
+    "leadSourceValue" : "Other",
+    "nationality" : "Citizenship__c",
+    "organization" : "Company",
+    "passportExpiry" : "Expiry_Date__c",
+    "passportIssuingCountry" : "Issuing_Country__c",
+    "passportNumber" : "Identification_Number__c",
+    "phone" : "MobilePhone",
+    "title" : "Title"
+  },
+  "program" : {
+    "agendaDocument" : "Agenda_Document__c",
+    "city" : "Study_Tour_City__c",
+    "driveFolder" : "Drive_Folder__c",
+    "knowledgeBase" : "Knowledge_Base__c",
+    "studyTourTypeValue" : "Study Tour",
+    "type" : "Type"
+  },
+  "programMember" : {
+    "attendanceStatus" : "Attendance_Status__c",
+    "attendingValue" : "Attending",
+    "newMemberStatusValue" : "Responded",
+    "status" : "Status"
+  },
+  "task" : {
+    "completedValue" : "Completed",
+    "emailSubtypeValue" : "Email",
+    "openValue" : "Open",
+    "phase" : "Study_Tour_Phase__c",
+    "phaseValues" : [
+      "0 Setup",
+      "1 Host Outreach",
+      "2 Program and Promotion",
+      "3 Registration",
+      "4 Submissions and Logistics",
+      "5 Tour Days",
+      "6 Wrap-up"
+    ],
+    "priorityValue" : "Normal"
+  }
+}

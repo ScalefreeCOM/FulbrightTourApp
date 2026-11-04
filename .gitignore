@@ -1,0 +1,26 @@
+# build output
+.build/
+dist/
+*.xcodeproj/
+.DS_Store
+
+# organisation-specific configuration (see config/studytours.config.example.json)
+config/studytours.config.json
+
+# org schema exports and third-party sample forms — never publish
+salesforce-metadata/
+samples/
+
+# trademarks / brand artwork: add locally (see Resources/Logos/README.md); publish only with permission
+Resources/Logos/*
+!Resources/Logos/README.md
+design/background-variants/
+
+# local tool settings
+.claude/settings.local.json
+
+# third-party documents (brand guidelines) — not ours to publish
+Resources/*.pdf
+
+# original photo files; only the selected, renamed photos in docs/images are published
+docs/images/WhatsApp*

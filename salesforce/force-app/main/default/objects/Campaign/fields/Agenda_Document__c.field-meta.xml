@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Agenda_Document__c</fullName>
+    <label>Agenda Document</label>
+    <description>Google Doc with the participant agenda. Maintained by the Fulbright Study Tours app.</description>
+    <inlineHelpText>Link to the agenda document shared with participants.</inlineHelpText>
+    <type>Url</type>
+    <required>false</required>
+    <externalId>false</externalId>
+    <trackHistory>false</trackHistory>
+</CustomField>

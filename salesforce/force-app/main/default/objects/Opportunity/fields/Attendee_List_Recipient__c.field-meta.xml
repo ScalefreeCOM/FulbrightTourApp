@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Attendee_List_Recipient__c</fullName>
+    <label>Attendee List Recipient</label>
+    <description>Contact at the host organization who receives the attendee list.</description>
+    <inlineHelpText>Person who receives the list of attendees for this visit.</inlineHelpText>
+    <type>Lookup</type>
+    <referenceTo>Contact</referenceTo>
+    <relationshipName>Attendee_List_Opportunities</relationshipName>
+    <relationshipLabel>Attendee Lists (Study Tours)</relationshipLabel>
+    <deleteConstraint>SetNull</deleteConstraint>
+    <required>false</required>
+    <trackHistory>false</trackHistory>
+</CustomField>

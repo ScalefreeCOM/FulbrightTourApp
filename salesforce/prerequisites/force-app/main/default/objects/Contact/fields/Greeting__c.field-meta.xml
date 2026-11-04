@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Greeting__c</fullName>
+    <label>Greeting</label>
+    <description>Salutation used in letters and emails to the contact.</description>
+    <type>Text</type>
+    <length>100</length>
+    <unique>false</unique>
+    <externalId>false</externalId>
+    <required>true</required>
+    <trackHistory>false</trackHistory>
+</CustomField>

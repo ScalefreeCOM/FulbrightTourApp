@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Drive_Folder__c</fullName>
+    <label>Drive Folder</label>
+    <description>Google Drive folder of the study tour (exports, agenda). Maintained by the Fulbright Study Tours app.</description>
+    <inlineHelpText>Link to the tour's Google Drive folder.</inlineHelpText>
+    <type>Url</type>
+    <required>false</required>
+    <externalId>false</externalId>
+    <trackHistory>false</trackHistory>
+</CustomField>

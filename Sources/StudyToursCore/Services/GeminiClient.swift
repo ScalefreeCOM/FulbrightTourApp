@@ -1,0 +1,47 @@
+import Foundation
+
+/// Google Gemini (Generative Language API) with an API key from the Keychain.
+public final class GeminiClient: @unchecked Sendable {
+    public var settings: GeminiSettings
+    public init(settings: GeminiSettings) { self.settings = settings }
+
+    public var isConfigured: Bool { !(Keychain.get(Keychain.Key.geminiKey) ?? "").isEmpty }
+
+    private func request(_ path: String, method: String = "GET", body: Any? = nil) async throws -> Any {
+        guard let key = Keychain.get(Keychain.Key.geminiKey), !key.isEmpty else {
+            throw AppError("Enter a Gemini API key in Settings.")
+        }
+        var req = URLRequest(url: URL(string: "https://generativelanguage.googleapis.com/v1beta/\(path)")!)
+        req.httpMethod = method
+        req.setValue(key, forHTTPHeaderField: "x-goog-api-key")
+        if let body {
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        }
+        return try HTTP.json(try await HTTP.send(req, service: "Gemini"))
+    }
+
+    public func generate(system: String, prompt: String, json: Bool, temperature: Double = 0.2) async throws -> String {
+        var config: [String: Any] = ["temperature": temperature]
+        if json { config["responseMimeType"] = "application/json" }
+        let body: [String: Any] = [
+            "systemInstruction": ["parts": [["text": system]]],
+            "contents": [["role": "user", "parts": [["text": prompt]]]],
+            "generationConfig": config,
+        ]
+        let r = try await request("models/\(settings.model):generateContent", method: "POST", body: body) as? [String: Any] ?? [:]
+        let parts = ((r["candidates"] as? [[String: Any]])?.first?["content"] as? [String: Any])?["parts"] as? [[String: Any]] ?? []
+        let text = parts.compactMap { $0["text"] as? String }.joined()
+        guard !text.isEmpty else { throw AppError("Gemini returned no text (possibly blocked by safety filters).") }
+        return text
+    }
+
+    public func listModels() async throws -> [String] {
+        let r = try await request("models?pageSize=200") as? [String: Any] ?? [:]
+        return (r["models"] as? [[String: Any]] ?? []).compactMap { m in
+            guard let methods = m["supportedGenerationMethods"] as? [String], methods.contains("generateContent"),
+                  let name = m["name"] as? String else { return nil }
+            return name.replacingOccurrences(of: "models/", with: "")
+        }.sorted()
+    }
+}

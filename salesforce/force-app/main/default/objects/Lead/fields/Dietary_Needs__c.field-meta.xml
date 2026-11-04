@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Dietary_Needs__c</fullName>
+    <label>Dietary Needs</label>
+    <description>Dietary requirements of the member for study tour meals (e.g. vegetarian, nut allergy).</description>
+    <inlineHelpText>e.g. vegetarian, vegan, halal, gluten-free, allergies</inlineHelpText>
+    <type>Text</type>
+    <length>255</length>
+    <required>false</required>
+    <unique>false</unique>
+    <externalId>false</externalId>
+    <trackHistory>false</trackHistory>
+</CustomField>

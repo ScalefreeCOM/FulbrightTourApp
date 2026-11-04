@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Study_Tour_Phase__c</fullName>
+    <label>Study Tour Phase</label>
+    <description>Phase of the study tour checklist this task belongs to. Set by the Fulbright Study Tours app; empty for all other activities.</description>
+    <inlineHelpText>Study tour planning phase of this checklist item.</inlineHelpText>
+    <type>Picklist</type>
+    <required>false</required>
+    <valueSet>
+        <restricted>true</restricted>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value><fullName>0 Setup</fullName><default>false</default><label>0 Setup</label></value>
+            <value><fullName>1 Host Outreach</fullName><default>false</default><label>1 Host Outreach</label></value>
+            <value><fullName>2 Program and Promotion</fullName><default>false</default><label>2 Program and Promotion</label></value>
+            <value><fullName>3 Registration</fullName><default>false</default><label>3 Registration</label></value>
+            <value><fullName>4 Submissions and Logistics</fullName><default>false</default><label>4 Submissions and Logistics</label></value>
+            <value><fullName>5 Tour Days</fullName><default>false</default><label>5 Tour Days</label></value>
+            <value><fullName>6 Wrap-up</fullName><default>false</default><label>6 Wrap-up</label></value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>

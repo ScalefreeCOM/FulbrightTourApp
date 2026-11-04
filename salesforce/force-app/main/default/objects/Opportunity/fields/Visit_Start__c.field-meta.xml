@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Visit_Start__c</fullName>
+    <label>Visit Start</label>
+    <description>Start of the meeting with the host organization during the study tour. Drives the agenda.</description>
+    <inlineHelpText>Date and time the visit/meeting starts.</inlineHelpText>
+    <type>DateTime</type>
+    <required>false</required>
+    <trackHistory>false</trackHistory>
+</CustomField>
