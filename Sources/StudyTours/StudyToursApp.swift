@@ -412,6 +412,26 @@ enum Snapshot {
     static let active = CommandLine.arguments.contains("--snapshot")
     @MainActor static func runIfRequested(_ state: AppState) {
         let args = CommandLine.arguments
+        // `--capture <dir>`: like --snapshot, but photographs the real window with screencapture,
+        // so Liquid Glass is rendered (used for the README screenshots).
+        if let i = args.firstIndex(of: "--capture"), i + 1 < args.count {
+            let dir = URL(fileURLWithPath: args[i + 1])
+            let screens: [(String, SidebarItem)] = [("overview", .overview), ("host-lists", .phase(.submissions)),
+                                                    ("registration", .phase(.registration)), ("agenda", .agenda)]
+            Task { @MainActor in
+                for (name, item) in screens {
+                    state.selection = item
+                    try? await Task.sleep(for: .seconds(2))
+                    guard let w = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil && $0.frame.height > 300 }) else { continue }
+                    let p = Process()
+                    p.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+                    p.arguments = ["-x", "-o", "-l", "\(w.windowNumber)", dir.appendingPathComponent("\(name).png").path]
+                    try? p.run(); p.waitUntilExit()
+                }
+                NSApp.terminate(nil)
+            }
+            return
+        }
         guard let i = args.firstIndex(of: "--snapshot"), i + 1 < args.count else { return }
         let dir = URL(fileURLWithPath: args[i + 1])
         let screens: [(String, SidebarItem)] = [("overview", .overview), ("registration", .phase(.registration)),
