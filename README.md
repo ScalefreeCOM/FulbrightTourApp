@@ -64,7 +64,8 @@ visitor side: one point of contact, a confirmed list of attendees **in your own 
 deadline, and the deletion of the attendees' identity data after the tour.
 
 **Organizers:** [Dr. György Kovács](https://www.linkedin.com/in/gyorgykovacs/) (Hungarian Fulbright Association; Board Member, European Network of American
-Alumni Associations) and [Michael Olschimke](https://www.linkedin.com/in/olschimke/) (German Fulbright Alumni Association).
+Alumni Associations) and [Michael Olschimke](https://www.linkedin.com/in/olschimke/) (German Fulbright Alumni Association),
+with [Genevieve Brechtel](https://www.linkedin.com/in/genevievebrechel/) and [Vincent Sipeer](https://www.linkedin.com/in/vincent-sipeer/).
 
 **Contact:** [michael.olschimke@fulbrightmail.org](mailto:michael.olschimke@fulbrightmail.org)
 
