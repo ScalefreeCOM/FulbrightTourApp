@@ -37,6 +37,11 @@ Past delegations have had the privilege of meeting, among others:
   and the **European Public Prosecutor's Office**
 
 <p align="center">
+  <img src="docs/images/tour-grand-duke-henri.jpg" alt="Dr. György Kovács in conversation with Grand Duke Henri of Luxembourg" width="80%"><br>
+  <em><a href="https://www.linkedin.com/in/gyorgykovacs/">Dr. György Kovács</a> in conversation with Grand Duke Henri of Luxembourg</em>
+</p>
+
+<p align="center">
   <img src="docs/images/tour-nato-sekerinska.jpg" alt="Radmila Šekerinska and Michael Olschimke at NATO Headquarters" width="45%"><br>
   <em><a href="https://www.linkedin.com/in/radmila-sekerinska-474283a/">Radmila Šekerinska</a>, Deputy Secretary General of NATO, with organizer <a href="https://www.linkedin.com/in/olschimke/">Michael Olschimke</a> at NATO Headquarters in Brussels</em>
 </p>
@@ -58,6 +63,24 @@ the study trips ([PDF](https://fulbright.de/backend/fileadmin/user_upload/3_Alum
 </p>
 
 ### Beyond borders: a lifelong network
+
+> "I founded these study tours more than ten years ago, at a time when none of us could have anticipated how
+> successful and truly international they would become. Yet when an initiative begins to bring people, institutions
+> and ideas together in a meaningful way, you can sense that it is growing into something exceptional — even if you
+> cannot yet foresee where the journey will lead."
+>
+> — **[Dr. György Kovács](https://www.linkedin.com/in/gyorgykovacs/)**, Founder of the Study Tour Initiative and
+> Co-organizer on behalf of the Hungarian Fulbright Association
+
+> "Throughout my career, I have been given many opportunities, often by mentors who never expected anything in
+> return. You cannot pay that kind of generosity back. You can only pass it forward, and organizing these study
+> tours is my way of doing that for the next generation of students.
+>
+> What makes the tours special is not only the people we meet in Brussels, but the delegation itself: current
+> Fulbright students and alumni from every generation, outstanding people who learn as much from each other as from
+> our hosts."
+>
+> — **[Michael Olschimke](https://www.linkedin.com/in/olschimke/)**, co-organizer, German Fulbright Alumni Association
 
 The European Fulbright Study Tours are **entirely volunteer-driven**, carried by alumni who are passionate about keeping
 the transatlantic friendship alive. With up to **70 applicants per trip**, the tours unite participants from many
@@ -105,7 +128,7 @@ with [Genevieve Brechelt](https://www.linkedin.com/in/genevievebrechel/) and [Vi
   <em>Panel discussion with <a href="https://www.linkedin.com/in/katalin-feher-phd-12627613/">Dr. Katalin Feher</a>,
   <a href="https://www.linkedin.com/in/lukas-sieper-8582a2255/">Lukas Sieper</a>, Member of the European Parliament,
   <a href="https://www.linkedin.com/in/vincent-sipeer/">Vincent Sipeer</a> and
-  <a href="https://www.linkedin.com/in/olschimke/">Michael Olschimke</a></em>
+  <a href="https://www.linkedin.com/in/olschimke/">Michael Olschimke</a>, founder and CEO of Scalefree</em>
 </p>
 
 The European Fulbright Study Tours app — the macOS app **and** its Salesforce backend (data model, metadata package,
@@ -173,6 +196,14 @@ email and the knowledge base (a Google Doc), lets you edit them, sends them via 
 archives the email, and records incoming and outgoing emails as activities on the member in Salesforce. New
 general facts from approved answers are added to the knowledge base. Emails from officials and their offices are
 highlighted and listed under *At a Glance* — they are answered personally in Gmail.
+
+**Salesforce stays up to date.** The app maintains the team's Salesforce records as part of the daily work instead
+of as a separate chore. When an email arrives from someone who is not in Salesforce yet, the app proposes a new record
+from the email: a **member** (Lead), added to the tour's program, for a prospective participant, or a **contact** with
+their **organization** (Account) for an official or their office. You confirm the proposal; right before writing, the
+app checks again that no record with that email address exists, so no duplicates are created. Every email exchanged
+with a member or contact is logged as an activity on their record, and corrections from the data-quality check
+(names, phone numbers, dates, countries) are written back after review.
 
 **Team chat.** Below *At a Glance*, the app shows the organizing team's **Google Chat** space: read the latest
 messages and write to the team without leaving the app. Status digests (overdue and upcoming tasks), the agenda and
