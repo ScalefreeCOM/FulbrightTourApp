@@ -30,7 +30,7 @@ policymaking.
 Past delegations have had the privilege of meeting, among others:
 
 - **Grand Duke Henri of Luxembourg**
-- **Radmila Šekerinska**, Deputy Secretary General of NATO, former Deputy Prime Minister and Minister of Defence of North Macedonia
+- **[Radmila Šekerinska](https://www.linkedin.com/in/radmila-sekerinska-474283a/)**, Deputy Secretary General of NATO, former Deputy Prime Minister and Minister of Defence of North Macedonia
 - **Dr. Heike Peitsch**, German Ambassador to Luxembourg
 - **Tamas Ivan Kovacs**, Ambassador of Hungary to Belgium and Luxembourg
 - Senior representatives of the **European Parliament**, the **European Commission**, the **European Court of Justice**
@@ -38,7 +38,7 @@ Past delegations have had the privilege of meeting, among others:
 
 <p align="center">
   <img src="docs/images/tour-nato-sekerinska.jpg" alt="Radmila Šekerinska and Michael Olschimke at NATO Headquarters" width="45%"><br>
-  <em>Radmila Šekerinska, Deputy Secretary General of NATO, with organizer <a href="https://www.linkedin.com/in/olschimke/">Michael Olschimke</a> at NATO Headquarters in Brussels</em>
+  <em><a href="https://www.linkedin.com/in/radmila-sekerinska-474283a/">Radmila Šekerinska</a>, Deputy Secretary General of NATO, with organizer <a href="https://www.linkedin.com/in/olschimke/">Michael Olschimke</a> at NATO Headquarters in Brussels</em>
 </p>
 
 By sharing these firsthand experiences on social media, the impact of each tour reaches far beyond the delegation
