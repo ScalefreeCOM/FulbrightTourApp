@@ -41,6 +41,13 @@ Past delegations have had the privilege of meeting, among others:
   <em><a href="https://www.linkedin.com/in/radmila-sekerinska-474283a/">Radmila Šekerinska</a>, Deputy Secretary General of NATO, with organizer <a href="https://www.linkedin.com/in/olschimke/">Michael Olschimke</a> at NATO Headquarters in Brussels</em>
 </p>
 
+<p align="center">
+  <img src="docs/images/tour-european-parliament-lakos.jpg" alt="Dr. György Kovács introduces Eszter Lakos, Member of the European Parliament, to the delegation" width="80%"><br>
+  <em><a href="https://www.linkedin.com/in/gyorgykovacs/">Dr. György Kovács</a> introduces
+  <a href="https://www.linkedin.com/in/eszter-lakos-6a454910/">Eszter Lakos</a>, Member of the European Parliament,
+  to the group at the European Parliament</em>
+</p>
+
 By sharing these firsthand experiences on social media, the impact of each tour reaches far beyond the delegation
 itself and sparks broader public engagement on transatlantic relations. The alumni magazine *FRANKLY* covered one of
 the study trips ([PDF](https://fulbright.de/backend/fileadmin/user_upload/3_Alumniae_und_Partner/001_Alumniae/Frankly_2025_WEB_NEU-2.pdf), pages 22–23).
@@ -65,7 +72,7 @@ deadline, and the deletion of the attendees' identity data after the tour.
 
 **Organizers:** [Dr. György Kovács](https://www.linkedin.com/in/gyorgykovacs/) (Hungarian Fulbright Association; Board Member, European Network of American
 Alumni Associations) and [Michael Olschimke](https://www.linkedin.com/in/olschimke/) (German Fulbright Alumni Association),
-with [Genevieve Brechtel](https://www.linkedin.com/in/genevievebrechel/) and [Vincent Sipeer](https://www.linkedin.com/in/vincent-sipeer/).
+with [Genevieve Brechelt](https://www.linkedin.com/in/genevievebrechel/) and [Vincent Sipeer](https://www.linkedin.com/in/vincent-sipeer/).
 
 **Contact:** [michael.olschimke@fulbrightmail.org](mailto:michael.olschimke@fulbrightmail.org)
 
