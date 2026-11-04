@@ -94,7 +94,11 @@ with [Genevieve Brechtel](https://www.linkedin.com/in/genevievebrechel/) and [Vi
 ## Built and maintained by Scalefree
 
 <p align="center">
-  <img src="docs/images/tour-panel-discussion.jpg" alt="Panel discussion during a European Fulbright Study Tour, with a Scalefree banner" width="80%">
+  <img src="docs/images/tour-panel-discussion.jpg" alt="Panel discussion during a European Fulbright Study Tour, with a Scalefree banner" width="80%"><br>
+  <em>Panel discussion with <a href="https://www.linkedin.com/in/katalin-feher-phd-12627613/">Dr. Katalin Feher</a>,
+  <a href="https://www.linkedin.com/in/lukas-sieper-8582a2255/">Lukas Sieper</a>, Member of the European Parliament,
+  <a href="https://www.linkedin.com/in/vincent-sipeer/">Vincent Sipeer</a> and
+  <a href="https://www.linkedin.com/in/olschimke/">Michael Olschimke</a></em>
 </p>
 
 The European Fulbright Study Tours app — the macOS app **and** its Salesforce backend (data model, metadata package,
