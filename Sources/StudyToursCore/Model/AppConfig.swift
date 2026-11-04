@@ -19,9 +19,29 @@ public struct AppConfig: Codable, Equatable, Sendable {
     public var agendaTemplateId: String
     /// Default knowledge base (Google Doc) for the email assistant.
     public var knowledgeBaseURL: String
+    /// Default Google Chat space of the team ("spaces/…" or the space's URL). Optional; can be picked in Settings.
+    public var googleChatSpace: String = ""
 
     public static let empty = AppConfig(salesforceURL: "", salesforceConsumerKey: "", googleClientId: "",
                                         driveParentFolderId: "", agendaTemplateId: "", knowledgeBaseURL: "")
+
+    public init(salesforceURL: String, salesforceConsumerKey: String, googleClientId: String,
+                driveParentFolderId: String, agendaTemplateId: String, knowledgeBaseURL: String, googleChatSpace: String = "") {
+        self.salesforceURL = salesforceURL; self.salesforceConsumerKey = salesforceConsumerKey
+        self.googleClientId = googleClientId; self.driveParentFolderId = driveParentFolderId
+        self.agendaTemplateId = agendaTemplateId; self.knowledgeBaseURL = knowledgeBaseURL
+        self.googleChatSpace = googleChatSpace
+    }
+
+    /// Tolerant: missing keys are empty, so older config files keep working.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        func s(_ k: CodingKeys) throws -> String { try c.decodeIfPresent(String.self, forKey: k) ?? "" }
+        self.init(salesforceURL: try s(.salesforceURL), salesforceConsumerKey: try s(.salesforceConsumerKey),
+                  googleClientId: try s(.googleClientId), driveParentFolderId: try s(.driveParentFolderId),
+                  agendaTemplateId: try s(.agendaTemplateId), knowledgeBaseURL: try s(.knowledgeBaseURL),
+                  googleChatSpace: try s(.googleChatSpace))
+    }
 
     public var isComplete: Bool { !salesforceURL.isEmpty && !driveParentFolderId.isEmpty && !agendaTemplateId.isEmpty }
 

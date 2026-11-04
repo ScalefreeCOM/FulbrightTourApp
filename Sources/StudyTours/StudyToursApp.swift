@@ -33,7 +33,7 @@ struct StudyToursApp: App {
             CommandMenu("Tour") {
                 Button("Scan Inbox") { state.refreshInbox() }.keyboardShortcut("r")
                 Button("Sync Calendar & Agenda") { state.syncAgenda() }.keyboardShortcut("s", modifiers: [.command, .shift])
-                Button("Share Team Status to WhatsApp") { state.shareToWhatsApp(Assistant.teamDigest(state.tour)) }
+                Button("Post Team Status to Chat…") { state.shareToTeam(Assistant.teamDigest(state.tour)) }
             }
         }
         Settings {
@@ -56,7 +56,11 @@ struct ContentView: View {
                         DetailRouter().frame(maxWidth: .infinity, maxHeight: .infinity)
                         StatusBar()
                     }
-                    MonitoringPanel().frame(width: 270)
+                    VStack(spacing: 12) {
+                        MonitoringPanel().frame(maxHeight: .infinity)
+                        TeamChatPanel().frame(height: 330)
+                    }
+                    .frame(width: 270)
                 }
                 PartnerFooter()
             }
@@ -323,14 +327,6 @@ struct MonitoringPanel: View {
                 }
                 .padding(12).frame(maxWidth: .infinity, alignment: .leading)
                 .glassPanel(cornerRadius: 14)
-
-                Button {
-                    state.shareToWhatsApp(Assistant.teamDigest(state.tour))
-                } label: {
-                    Label("Team status → WhatsApp", systemImage: "bubble.left.and.bubble.right").frame(maxWidth: .infinity)
-                }
-                .glassButton(prominent: true)
-                .tint(Theme.fbMid)
             }
             .padding(14)
         }

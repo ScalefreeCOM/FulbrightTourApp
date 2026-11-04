@@ -494,3 +494,45 @@ final class SalesforceMappingTests: XCTestCase {
         }
     }
 }
+
+final class TeamChatTests: XCTestCase {
+    func testSpaceNameFromInputs() {
+        XCTAssertEqual(TeamChat.spaceName(from: "spaces/AAAAbc_12"), "spaces/AAAAbc_12")
+        XCTAssertEqual(TeamChat.spaceName(from: "AAAAbc_12"), "spaces/AAAAbc_12")
+        XCTAssertEqual(TeamChat.spaceName(from: "https://mail.google.com/chat/u/0/#chat/space/AAAAbc_12"), "spaces/AAAAbc_12")
+        XCTAssertEqual(TeamChat.spaceName(from: "https://chat.google.com/room/AAAAbc_12?cls=7"), "spaces/AAAAbc_12")
+        XCTAssertEqual(TeamChat.spaceName(from: "URL of the team's Google Chat space (optional)"), "")
+        XCTAssertEqual(TeamChat.spaceName(from: "  "), "")
+    }
+
+    func testParsesMessagesOldestFirst() {
+        let json: [String: Any] = ["messages": [
+            ["name": "spaces/A/messages/2", "sender": ["name": "users/2", "type": "HUMAN"],
+             "text": "Bus at 8:30", "createTime": "2026-05-04T08:01:02.123456789Z"],
+            ["name": "spaces/A/messages/1", "sender": ["name": "users/1", "displayName": "Jane Doe", "type": "HUMAN"],
+             "text": "Hotel confirmed", "createTime": "2026-05-04T07:00:00Z"],
+        ]]
+        let m = TeamChat.messages(fromList: json)
+        XCTAssertEqual(m.map(\.id), ["spaces/A/messages/1", "spaces/A/messages/2"])
+        XCTAssertEqual(m[0].senderName, "Jane Doe")
+        XCTAssertEqual(m[1].senderName, "")
+        XCTAssertEqual(m[1].text, "Bus at 8:30")
+        XCTAssertNotEqual(m[1].created, .distantPast)
+    }
+
+    func testParsesSpaces() {
+        let s = TeamChat.spaces(fromList: ["spaces": [["name": "spaces/B", "displayName": "Study Tour Team"],
+                                                      ["name": "spaces/C"]]])
+        XCTAssertEqual(s.map(\.name), ["spaces/C", "Study Tour Team"].sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending })
+    }
+
+    func testOlderConfigAndSettingsStillDecode() throws {
+        let cfg = try JSONDecoder().decode(AppConfig.self, from: Data(#"{"salesforceURL":"https://example.my.salesforce.com"}"#.utf8))
+        XCTAssertEqual(cfg.salesforceURL, "https://example.my.salesforce.com")
+        XCTAssertEqual(cfg.googleChatSpace, "")
+        let g = try JSONDecoder().decode(GoogleSettings.self, from: Data(#"{"clientId":"x","callbackPort":9000}"#.utf8))
+        XCTAssertEqual(g.callbackPort, 9000)
+        XCTAssertEqual(g.chatSpace, "")
+        XCTAssertEqual(g.inboxQuery, GoogleSettings().inboxQuery)
+    }
+}

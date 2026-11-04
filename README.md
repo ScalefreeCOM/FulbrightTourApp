@@ -140,7 +140,7 @@ documents and calendar live in **Google Workspace**; **Google Gemini** helps wit
 | 2 | Program & promotion | Links to the agenda and the shared knowledge base used by the email assistant |
 | 3 | Registration & data quality | Loads the attending members, cleans names, emails, phone numbers, dates and countries, checks ID documents (missing, expired, expiring), finds duplicates — corrections are written back after review |
 | 4 | Host submissions & logistics | Fills each host's **own Excel registration form** (attached to the Opportunity) with the attending members, respecting the form's dropdowns, country codes and date formats; review, then send via Gmail to the host's contact |
-| 5 | Tour days | Attendance list, today's plan for the team |
+| 5 | Tour days | Attendance list, today's plan posted to the team chat |
 | 6 | Wrap-up & data protection | Thank-you emails to hosts; deletion of passport and emergency-contact data in Salesforce with an audit record on every member |
 
 <p align="center">
@@ -152,6 +152,11 @@ email and the knowledge base (a Google Doc), lets you edit them, sends them via 
 archives the email, and records incoming and outgoing emails as activities on the member in Salesforce. New
 general facts from approved answers are added to the knowledge base. Emails from officials and their offices are
 highlighted and listed under *At a Glance* — they are answered personally in Gmail.
+
+**Team chat.** Below *At a Glance*, the app shows the organizing team's **Google Chat** space: read the latest
+messages and write to the team without leaving the app. Status digests (overdue and upcoming tasks), the agenda and
+today's plan can be inserted into the message box with one click — you review the text before it is sent. Messages
+are sent as the Google account signed in to the app; there is no bot.
 
 **Privacy by design.** Member data (incl. ID data) is loaded from Salesforce into memory only and never stored on
 the Mac. Gemini never sees member data when it reads a host form — only the form's headers; email text sent to
@@ -192,6 +197,7 @@ cp config/studytours.config.example.json config/studytours.config.json
 | `driveParentFolderId` | Shared Google Drive folder that contains one folder per study tour |
 | `agendaTemplateId` | Google Slides template copied into each tour folder |
 | `knowledgeBaseURL` | Default knowledge base (Google Doc) for the email assistant |
+| `googleChatSpace` | Optional: link to the team's Google Chat space (can also be picked in the app's Settings) |
 
 `config/studytours.config.json` is git-ignored. The build script bundles it into the app.
 
@@ -239,9 +245,15 @@ no client secret required. Put its Consumer Key into the config file.
 
 ### 4. Google
 
-Create an OAuth client of type *Desktop app* in a Google Cloud project, enable the Gmail, Drive, Docs, Slides and
-Calendar APIs and put the client ID into the config file; the client secret is entered once in the app's Settings
-and kept in the macOS Keychain. Requested scopes: `gmail.modify`, `drive`, `documents`, `calendar.events`.
+Create an OAuth client of type *Desktop app* in a Google Cloud project, enable the Gmail, Drive, Docs, Slides,
+Calendar, Google Chat and People APIs and put the client ID into the config file; the client secret is entered once
+in the app's Settings and kept in the macOS Keychain. Requested scopes: `gmail.modify`, `drive`, `documents`,
+`calendar.events`, `chat.messages`, `chat.spaces.readonly`, `directory.readonly` (sender names in the chat).
+
+**Team chat:** the Google Chat API is only available for Google Workspace accounts, and Google requires the Chat API
+to be configured in the Cloud project (*Google Chat API → Configuration*: app name, avatar, description) even though
+the app only acts on behalf of the signed-in user. Create a space in Google Chat for the organizing team, add the
+account that signs in to the app, and choose the space in *Settings → Connections → Team chat*.
 With a Google Workspace you can register the app as *internal*; otherwise Google's rules for external apps in
 testing mode apply.
 

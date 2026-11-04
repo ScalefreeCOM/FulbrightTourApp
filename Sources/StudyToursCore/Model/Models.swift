@@ -380,7 +380,28 @@ public struct GoogleSettings: Codable, Hashable, Sendable {
     public var inboxQuery: String = "in:inbox newer_than:14d"
     public var importantLabel: String = "Study Tour/Important"
     public var answeredLabel: String = "Study Tour/Answered"
+    /// Team chat space ("spaces/…"), chosen in Settings. Empty = default from the config file.
+    public var chatSpace: String = ""
+    public var chatSpaceTitle: String = ""
     public init() {}
+
+    /// Tolerant: settings saved by older versions lack newer keys.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = GoogleSettings()
+        clientId = try c.decodeIfPresent(String.self, forKey: .clientId) ?? d.clientId
+        callbackPort = try c.decodeIfPresent(Int.self, forKey: .callbackPort) ?? d.callbackPort
+        inboxQuery = try c.decodeIfPresent(String.self, forKey: .inboxQuery) ?? d.inboxQuery
+        importantLabel = try c.decodeIfPresent(String.self, forKey: .importantLabel) ?? d.importantLabel
+        answeredLabel = try c.decodeIfPresent(String.self, forKey: .answeredLabel) ?? d.answeredLabel
+        chatSpace = try c.decodeIfPresent(String.self, forKey: .chatSpace) ?? d.chatSpace
+        chatSpaceTitle = try c.decodeIfPresent(String.self, forKey: .chatSpaceTitle) ?? d.chatSpaceTitle
+    }
+
+    /// The team chat space in use: chosen in Settings, else the config default.
+    public var effectiveChatSpace: String {
+        chatSpace.isEmpty ? TeamChat.spaceName(from: AppConfig.current.googleChatSpace) : chatSpace
+    }
 }
 
 public struct GeminiSettings: Codable, Hashable, Sendable {

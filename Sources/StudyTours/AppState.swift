@@ -95,6 +95,16 @@ final class AppState {
     private var senderCache: [String: [SFRecordRef]] = [:]
     private var pollTask: Task<Void, Never>?
 
+    // team chat (Google Chat)
+    var chatMessages: [ChatMessage] = []
+    var chatDraft = ""
+    var chatError: String?
+    var chatSending = false
+    private var chatTask: Task<Void, Never>?
+    private var chatNames: [String: String] = [:]
+    private(set) var myChatUserId = ""
+    private var chatSpaceLoaded = ""
+
     init() {
         let d = Store.load()
         data = d
@@ -104,6 +114,7 @@ final class AppState {
         if data.tours.isEmpty { newLocalTour() }
         startPolling()
         startPulling()
+        startChatPolling()
     }
 
     // MARK: Tour access
@@ -1015,15 +1026,72 @@ final class AppState {
         }
     }
 
-    // MARK: WhatsApp (team coordination)
+    // MARK: Team chat (Google Chat space, as the signed-in Google user)
 
-    func shareToWhatsApp(_ text: String) {
-        var allowed = CharacterSet.urlQueryAllowed; allowed.remove(charactersIn: "&=+#?")
-        let enc = text.addingPercentEncoding(withAllowedCharacters: allowed) ?? ""
-        if let app = URL(string: "whatsapp://send?text=\(enc)"), NSWorkspace.shared.urlForApplication(toOpen: app) != nil {
-            NSWorkspace.shared.open(app)
-        } else if let web = URL(string: "https://wa.me/?text=\(enc)") {
-            NSWorkspace.shared.open(web)
+    var chatSpace: String { settings.google.effectiveChatSpace }
+    var chatReady: Bool { google.isConnected && !chatSpace.isEmpty }
+
+    /// Puts text into the chat composer for review — nothing is posted until the user presses Send.
+    func shareToTeam(_ text: String) {
+        chatDraft = text
+        if !chatReady { flash("Choose the team's Google Chat space in Settings first") }
+    }
+
+    func refreshChat() async {
+        guard chatReady else { chatMessages = []; return }
+        let space = chatSpace
+        do {
+            if chatSpaceLoaded != space {
+                chatMessages = []
+                myChatUserId = (try? await google.chatMyUserId(space: space)) ?? ""
+                if settings.google.chatSpaceTitle.isEmpty, let s = try? await google.chatSpace(space) {
+                    settings.google.chatSpaceTitle = s.name
+                }
+                chatSpaceLoaded = space
+            }
+            var msgs = try await google.chatMessages(space: space)
+            for i in msgs.indices where msgs[i].senderName.isEmpty {
+                msgs[i].senderName = await chatName(msgs[i].senderId)
+            }
+            chatMessages = msgs
+            chatError = nil
+        } catch {
+            chatError = error.localizedDescription
+        }
+    }
+
+    private func chatName(_ userId: String) async -> String {
+        if userId == myChatUserId { return "You" }
+        if let n = chatNames[userId] { return n }
+        let n = (try? await google.personName(chatUserId: userId)).flatMap { $0.isEmpty ? nil : $0 } ?? "Team member"
+        chatNames[userId] = n
+        return n
+    }
+
+    func sendChat() {
+        let text = chatDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard chatReady, !text.isEmpty, !chatSending else { return }
+        chatSending = true
+        Task {
+            defer { chatSending = false }
+            do {
+                try await google.postChatMessage(space: chatSpace, text: text)
+                chatDraft = ""
+                await refreshChat()
+            } catch {
+                chatError = error.localizedDescription
+            }
+        }
+    }
+
+    func startChatPolling() {
+        chatTask?.cancel()
+        chatTask = Task { [weak self] in
+            while !Task.isCancelled {
+                // poll only while the app is in front (saves quota); otherwise check once a minute
+                if let self, self.chatReady, NSApp.isActive || self.chatMessages.isEmpty { await self.refreshChat() }
+                try? await Task.sleep(for: .seconds(NSApp.isActive ? 20 : 60))
+            }
         }
     }
 }

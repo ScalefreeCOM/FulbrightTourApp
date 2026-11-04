@@ -47,11 +47,14 @@ struct ConnectionsSettings: View {
                     state.connectSalesforce()
                 } disconnect: { state.salesforce.disconnect(); refresh += 1 }
             }
-            Section("Google (Gmail · Drive · Calendar)") {
+            Section("Google (Gmail · Drive · Docs · Calendar · Chat)") {
                 TextField("OAuth client ID (Desktop app)", text: $state.settings.google.clientId)
                 SecretField(title: "OAuth client secret", key: Keychain.Key.googleSecret)
-                Text("Sign in with the Fulbright mailbox account. Scopes: Gmail modify, Drive (app files only), Calendar events.").font(.caption).foregroundStyle(.secondary)
+                Text("Sign in with the Fulbright mailbox account. Scopes: Gmail modify, Drive, Docs, Calendar events, Chat messages and spaces (read), directory (sender names in the chat).").font(.caption).foregroundStyle(.secondary)
                 status(state.google.isConnected, "") { state.connectGoogle() } disconnect: { state.google.disconnect(); refresh += 1 }
+            }
+            Section("Team chat (Google Chat)") {
+                ChatSpaceSettings()
             }
             Section("Google Gemini") {
                 SecretField(title: "Gemini API key", key: Keychain.Key.geminiKey)

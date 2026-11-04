@@ -26,7 +26,7 @@ struct AgendaView: View {
                         Button { state.syncAgenda() } label: { Label("Sync now (\(tour.agenda.filter(\.needsSync).count) pending)", systemImage: "arrow.triangle.2.circlepath") }
                             .buttonStyle(.borderedProminent).tint(Theme.fbBlue)
                             .disabled(!state.salesforce.isConnected && !state.google.isConnected)
-                        Button { state.shareToWhatsApp(agendaText()) } label: { Image(systemName: "bubble.left.and.bubble.right") }.help("Share agenda to WhatsApp")
+                        Button { state.shareToTeam(agendaText()) } label: { Image(systemName: "bubble.left.and.bubble.right") }.help("Post the agenda to the team chat (you review it before sending)")
                     }
                 }
                 let byDay = Dictionary(grouping: tour.agenda) { Calendar.current.startOfDay(for: $0.start) }

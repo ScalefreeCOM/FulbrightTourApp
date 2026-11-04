@@ -29,6 +29,9 @@ public final class GoogleClient: @unchecked Sendable {
         "https://www.googleapis.com/auth/drive",            // shared study tour folders + agenda template copies
         "https://www.googleapis.com/auth/calendar.events",  // tour calendar
         "https://www.googleapis.com/auth/documents",          // read + extend the knowledge base doc
+        "https://www.googleapis.com/auth/chat.messages",       // team chat: read + post in the team space
+        "https://www.googleapis.com/auth/chat.spaces.readonly", // team chat: list spaces to pick the team space
+        "https://www.googleapis.com/auth/directory.readonly",  // team chat: show sender names (Workspace directory)
     ]
 
     public init(settings: GoogleSettings) { self.settings = settings }
@@ -236,6 +239,48 @@ public final class GoogleClient: @unchecked Sendable {
     }
 
     public static func fileURL(_ id: String) -> URL? { URL(string: "https://drive.google.com/open?id=\(id)") }
+
+    // MARK: Chat (team space)
+
+    /// Spaces (not DMs) the signed-in user belongs to.
+    public func chatSpaces() async throws -> [ChatSpace] {
+        let filter = Self.q("spaceType = \"SPACE\"")
+        let r = try await call("GET", "https://chat.googleapis.com/v1/spaces?pageSize=200&filter=\(filter)") as? [String: Any] ?? [:]
+        return TeamChat.spaces(fromList: r)
+    }
+
+    public func chatSpace(_ space: String) async throws -> ChatSpace {
+        let r = try await call("GET", "https://chat.googleapis.com/v1/\(space)") as? [String: Any] ?? [:]
+        return TeamChat.spaces(fromList: ["spaces": [r]]).first ?? ChatSpace(id: space, name: space)
+    }
+
+    /// The newest messages of a space, oldest first.
+    public func chatMessages(space: String, max: Int = 50) async throws -> [ChatMessage] {
+        let order = Self.q("createTime desc")
+        let r = try await call("GET", "https://chat.googleapis.com/v1/\(space)/messages?pageSize=\(max)&orderBy=\(order)") as? [String: Any] ?? [:]
+        return TeamChat.messages(fromList: r)
+    }
+
+    /// Posts a message as the signed-in user.
+    @discardableResult
+    public func postChatMessage(space: String, text: String) async throws -> ChatMessage? {
+        let r = try await call("POST", "https://chat.googleapis.com/v1/\(space)/messages", json: ["text": text]) as? [String: Any] ?? [:]
+        return TeamChat.message(r)
+    }
+
+    /// "users/123" of the signed-in user in that space.
+    public func chatMyUserId(space: String) async throws -> String {
+        let r = try await call("GET", "https://chat.googleapis.com/v1/\(space)/members/users/me") as? [String: Any] ?? [:]
+        return (r["member"] as? [String: Any])?["name"] as? String ?? ""
+    }
+
+    /// Display name of a Chat user ("users/123") from the Workspace directory. The Chat API does not return
+    /// sender names for user-authenticated calls.
+    public func personName(chatUserId: String) async throws -> String {
+        let id = chatUserId.replacingOccurrences(of: "users/", with: "")
+        let r = try await call("GET", "https://people.googleapis.com/v1/people/\(id)?personFields=names&sources=DIRECTORY_SOURCE_TYPE_DOMAIN_PROFILE") as? [String: Any] ?? [:]
+        return ((r["names"] as? [[String: Any]])?.first?["displayName"] as? String) ?? ""
+    }
 
     // MARK: Calendar
 

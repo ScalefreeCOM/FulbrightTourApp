@@ -242,7 +242,7 @@ public enum Assistant {
                               existingAccount: nil, possibleDuplicates: [])
     }
 
-    // MARK: Team digest (WhatsApp / chat)
+    // MARK: Team digest (Google Chat)
 
     public static func teamDigest(_ tour: Tour, today: Date = Date(), horizonDays: Int = 14) -> String {
         let df = DateFormatter(); df.dateFormat = "EEE dd.MM."

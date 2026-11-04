@@ -156,9 +156,6 @@ struct SetupTools: View {
                 TextField("City / region", text: $state.data.tours[i].city)
                 DatePicker("Start", selection: $state.data.tours[i].startDate, displayedComponents: .date)
                 DatePicker("End", selection: $state.data.tours[i].endDate, in: state.tour.startDate..., displayedComponents: .date)
-                TextField("WhatsApp team group invite link (optional)", text: Binding(
-                    get: { state.tour.links.first { $0.contains("chat.whatsapp.com") } ?? "" },
-                    set: { v in state.tour.links.removeAll { $0.contains("chat.whatsapp.com") }; if !v.isEmpty { state.tour.links.append(v) } }))
             }
             .onChange(of: state.tour) { state.save() }
         }
@@ -266,7 +263,7 @@ struct ProgramTools: View {
         }
         KnowledgeBaseCard()
         Card(title: "Documents & links (flyer, marketing, registration form)") {
-            ForEach(state.tour.links.filter { !$0.contains("chat.whatsapp.com") }, id: \.self) { l in
+            ForEach(state.tour.links, id: \.self) { l in
                 HStack { if let u = URL(string: l) { Link(l, destination: u) } else { Text(l) }
                     Spacer(); Button { state.tour.links.removeAll { $0 == l } } label: { Image(systemName: "minus.circle") }.buttonStyle(.borderless) }
             }
@@ -452,9 +449,9 @@ struct TourDayTools: View {
             let today = state.tour.agenda.filter { Calendar.current.isDateInToday($0.start) }
             if today.isEmpty { Text("No agenda items today.").foregroundStyle(.secondary) }
             ForEach(today) { i in HStack { Text(i.start.formatted(date: .omitted, time: .shortened)).frame(width: 60); Text(i.title).bold(); Text(i.location).foregroundStyle(.secondary) } }
-            Button("Send today's plan to the team (WhatsApp)") {
+            Button("Post today's plan to the team chat…") {
                 let lines = today.map { "• \($0.start.formatted(date: .omitted, time: .shortened)) \($0.title) – \($0.location)" }
-                state.shareToWhatsApp("*\(state.tour.name) – today*\n" + lines.joined(separator: "\n"))
+                state.shareToTeam("*\(state.tour.name) – today*\n" + lines.joined(separator: "\n"))
             }.disabled(today.isEmpty)
         }
     }
