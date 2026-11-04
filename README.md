@@ -33,6 +33,11 @@ Past delegations have had the privilege of meeting, among others:
 - Senior representatives of the **European Parliament**, the **European Commission**, the **European Court of Justice**
   and the **European Public Prosecutor's Office**
 
+<p align="center">
+  <img src="docs/images/tour-nato-sekerinska.jpg" alt="Radmila Šekerinska and Michael Olschimke at NATO Headquarters" width="45%"><br>
+  <em>Radmila Šekerinska, Deputy Secretary General of NATO, with organizer Michael Olschimke at NATO Headquarters in Brussels</em>
+</p>
+
 By sharing these firsthand experiences on social media, the impact of each tour reaches far beyond the delegation
 itself and sparks broader public engagement on transatlantic relations. The alumni magazine *FRANKLY* covered one of
 the study trips ([PDF](https://fulbright.de/backend/fileadmin/user_upload/3_Alumniae_und_Partner/001_Alumniae/Frankly_2025_WEB_NEU-2.pdf), pages 22–23).
@@ -59,6 +64,11 @@ deadline, and the deletion of the attendees' identity data after the tour.
 Alumni Associations) and Michael Olschimke (German Fulbright Alumni Association).
 
 **Contact:** [michael.olschimke@fulbrightmail.org](mailto:michael.olschimke@fulbrightmail.org)
+
+<p align="center">
+  <img src="docs/images/tour-organizers-hungarian-embassy.jpg" alt="Dr. György Kovács and Michael Olschimke at the Embassy of Hungary in Brussels" width="35%"><br>
+  <em>The organizers Dr. György Kovács (left) and Michael Olschimke at the Embassy of Hungary in Brussels</em>
+</p>
 
 ---
 
