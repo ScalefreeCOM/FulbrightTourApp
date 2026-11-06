@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 import StudyToursCore
 
 struct SettingsView: View {
+    @Environment(AppState.self) private var state
     var body: some View {
         TabView {
             ConnectionsSettings().tabItem { Label("Connections", systemImage: "link") }
@@ -11,10 +12,47 @@ struct SettingsView: View {
             BrandingSettings().tabItem { Label("Branding", systemImage: "photo") }
         }
         .padding(20)
+        .sheet(item: Binding(get: { state.signIn }, set: { if $0 == nil { state.cancelSignIn() } })) { SignInSheet(prompt: $0) }
+    }
+}
+
+/// Lets the user open the sign-in page in the browser/profile of their choice (e.g. the one signed in to the Fulbright account).
+struct SignInSheet: View {
+    @Environment(AppState.self) private var state
+    let prompt: SignInPrompt
+    @State private var copied = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Sign in to \(prompt.service)").font(.title2.bold())
+            Text("Open the sign-in page in the browser where you are signed in with the right account. If that is not your default browser, copy the link and paste it into the other browser or profile.")
+                .fixedSize(horizontal: false, vertical: true)
+            if prompt.service == "Google" {
+                Text("Use the Fulbright mailbox account. If Google says the app isn't verified, choose Advanced → Go to … (unsafe).")
+                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            HStack {
+                ProgressView().controlSize(.small)
+                Text("Waiting for the sign-in… Keep this window open until the browser says “Signed in”.").font(.caption).foregroundStyle(.secondary)
+            }
+            HStack {
+                Button("Cancel", role: .cancel) { state.cancelSignIn() }
+                Spacer()
+                Button(copied ? "Link copied" : "Copy link") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(prompt.url.absoluteString, forType: .string)
+                    copied = true
+                }
+                Button("Open in default browser") { AppState.open(prompt.url) }.keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(24)
+        .frame(width: 480)
     }
 }
 
 struct SecretField: View {
+    @Environment(AppState.self) private var appState
     let title: String
     let key: String
     @State private var value = ""
@@ -23,8 +61,8 @@ struct SecretField: View {
     var body: some View {
         HStack {
             SecureField(title, text: $value, prompt: Text(stored ? "•••••••• (saved in Keychain)" : title))
-            Button("Save") { Keychain.set(value, for: key); value = ""; stored = Keychain.get(key) != nil }.disabled(value.isEmpty)
-            if stored { Button("Remove") { Keychain.set(nil, for: key); stored = false } }
+            Button("Save") { Keychain.set(value, for: key); value = ""; stored = Keychain.get(key) != nil; appState.refreshConnectionState() }.disabled(value.isEmpty)
+            if stored { Button("Remove") { Keychain.set(nil, for: key); stored = false; appState.refreshConnectionState() } }
         }
         .onAppear { stored = Keychain.get(key) != nil }
     }

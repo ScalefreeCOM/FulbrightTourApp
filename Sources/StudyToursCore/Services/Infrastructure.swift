@@ -132,9 +132,28 @@ public final class LoopbackReceiver: @unchecked Sendable {
 
     public init(port: Int) { self.port = UInt16(port) }
 
+    /// The sign-in currently waiting on each port, so a new attempt can replace an old one.
+    nonisolated(unsafe) private static var active: [UInt16: LoopbackReceiver] = [:]
+    private static let activeLock = NSLock()
+
+    /// Stops a sign-in that is still waiting on this port (e.g. the user pressed Cancel or Connect again).
+    public static func cancel(port: Int, reason: String = "Sign-in cancelled.") {
+        activeLock.lock(); let r = active[UInt16(port)]; activeLock.unlock()
+        r?.finish(.failure(AppError(reason)))
+    }
+
     /// Starts listening, calls `open` (which should launch the browser), and waits for the redirect.
     public func waitForCode(open: @escaping () -> Void) async throws -> [String: String] {
+        // A previous attempt may still hold the port: stop it and give the socket a moment to close.
+        let previous = Self.activeLock.withLock { () -> LoopbackReceiver? in
+            let p = Self.active[port]; Self.active[port] = self; return p
+        }
+        if let previous {
+            previous.finish(.failure(AppError("Sign-in was restarted.")))
+            try await Task.sleep(for: .milliseconds(400))
+        }
         let params = NWParameters.tcp
+        params.allowLocalEndpointReuse = true
         params.requiredLocalEndpoint = NWEndpoint.hostPort(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: port)!)
         let l = try NWListener(using: params)
         listener = l
@@ -183,6 +202,7 @@ public final class LoopbackReceiver: @unchecked Sendable {
         let c = continuation; continuation = nil
         lock.unlock()
         listener?.cancel()
+        Self.activeLock.lock(); if Self.active[port] === self { Self.active[port] = nil }; Self.activeLock.unlock()
         c?.resume(with: result)
     }
 }

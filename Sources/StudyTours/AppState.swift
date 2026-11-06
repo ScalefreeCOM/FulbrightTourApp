@@ -41,6 +41,13 @@ enum SidebarItem: Hashable {
     case overview, phase(PhaseID), agenda, inbox, settings
 }
 
+struct SignInPrompt: Identifiable, Equatable {
+    let service: String
+    let url: URL
+    let port: Int
+    var id: String { url.absoluteString }
+}
+
 @MainActor
 @Observable
 final class AppState {
@@ -75,6 +82,9 @@ final class AppState {
     /// so views use these and they are refreshed after every connect/disconnect.
     private(set) var salesforceConnected = false
     private(set) var googleConnected = false
+    private(set) var geminiConfigured = false
+    /// The saved Gemini key is the sponsored one (footer: "Gemini AI is paid by Scalefree").
+    private(set) var geminiSponsored = false
 
     // host visits (Opportunities) and attendee-list drafts
     var hostVisits: [HostVisit] = []
@@ -83,6 +93,8 @@ final class AppState {
     var busy: String?
     var lastError: String?
     var toast: String?
+    /// Sign-in waiting for the browser: shown as a sheet so the user can pick the browser/profile.
+    var signIn: SignInPrompt?
 
     let salesforce: SalesforceClient
     let google: GoogleClient
@@ -193,8 +205,10 @@ final class AppState {
     // MARK: Connections
 
     func connectSalesforce() {
+        let port = settings.salesforce.callbackPort
         run("Connecting to Salesforce…") {
-            try await self.salesforce.connect(openURL: Self.open)
+            defer { self.signIn = nil }
+            try await self.salesforce.connect(openURL: self.showSignIn("Salesforce", port: port))
             self.refreshConnectionState()
             self.flash("Salesforce connected")
             try await self.salesforceStartup()
@@ -211,11 +225,24 @@ final class AppState {
         if !tour.campaignId.isEmpty { await refreshProgram() }
     }
     func connectGoogle() {
+        let port = settings.google.callbackPort
         run("Connecting to Google…") {
-            try await self.google.connect(openURL: Self.open)
+            defer { self.signIn = nil }
+            try await self.google.connect(openURL: self.showSignIn("Google", port: port))
             self.refreshConnectionState()
             self.flash("Google connected")
         }
+    }
+
+    /// Instead of opening the default browser right away, show the link so the user can choose
+    /// the browser or profile that is signed in with the right account.
+    private func showSignIn(_ service: String, port: Int) -> (URL) -> Void {
+        { url in Task { @MainActor in self.signIn = SignInPrompt(service: service, url: url, port: port) } }
+    }
+
+    func cancelSignIn() {
+        if let p = signIn { LoopbackReceiver.cancel(port: p.port) }
+        signIn = nil
     }
 
     func disconnectSalesforce() { salesforce.disconnect(); refreshConnectionState() }
@@ -224,6 +251,8 @@ final class AppState {
     func refreshConnectionState() {
         salesforceConnected = salesforce.isConnected
         googleConnected = google.isConnected
+        geminiConfigured = gemini.isConfigured
+        geminiSponsored = AppConfig.geminiKeyIsSponsored
     }
 
     // MARK: Setup
