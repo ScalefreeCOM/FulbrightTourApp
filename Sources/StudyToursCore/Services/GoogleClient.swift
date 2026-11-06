@@ -83,7 +83,12 @@ public final class GoogleClient: @unchecked Sendable {
 
     private func refresh() async throws {
         guard let rt = Keychain.get(Keychain.Key.googleRefresh) else { throw AppError("Google is not connected.") }
-        try await token(["grant_type": "refresh_token", "refresh_token": rt])
+        do {
+            try await token(["grant_type": "refresh_token", "refresh_token": rt])
+        } catch let e as APIError where e.body.contains("invalid_grant") {
+            disconnect()
+            throw AppError("Your Google sign-in has expired. Open Settings → Connections and click Connect… again.")
+        }
     }
 
     @discardableResult

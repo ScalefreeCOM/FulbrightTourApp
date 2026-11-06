@@ -85,7 +85,13 @@ public final class SalesforceClient: @unchecked Sendable {
 
     private func refresh() async throws {
         guard let rt = Keychain.get(Keychain.Key.sfRefresh) else { throw AppError("Salesforce is not connected.") }
-        try await token(["grant_type": "refresh_token", "refresh_token": rt, "client_id": settings.effectiveClientId])
+        do {
+            try await token(["grant_type": "refresh_token", "refresh_token": rt, "client_id": settings.effectiveClientId])
+        } catch let e as APIError where e.body.contains("invalid_grant") {
+            // Sign-in expired or was revoked (refresh-token policy, password change, admin): sign out cleanly.
+            disconnect()
+            throw AppError("Your Salesforce sign-in has expired. Open Settings → Connections and click Connect… again.")
+        }
     }
 
     private func token(_ params: [String: String]) async throws {

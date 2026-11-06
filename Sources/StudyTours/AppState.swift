@@ -174,6 +174,7 @@ final class AppState {
             lastError = nil
             defer { busy = nil }
             do { try await work() } catch { lastError = error.localizedDescription }
+            refreshConnectionState()   // a failed token refresh signs the client out
         }
     }
 
@@ -328,9 +329,11 @@ final class AppState {
         pullTask?.cancel()
         pullTask = Task { [weak self] in
             if let self, self.salesforce.isConnected { try? await self.salesforceStartup() }
+            self?.refreshConnectionState()
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(60))
                 await self?.refreshProgram()
+                self?.refreshConnectionState()
             }
         }
     }
