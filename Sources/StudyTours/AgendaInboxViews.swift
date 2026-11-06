@@ -136,7 +136,10 @@ struct InboxView: View {
         HSplitView {
             VStack(spacing: 0) {
                 HStack {
-                    Button { state.refreshInbox() } label: { Label("Scan", systemImage: "arrow.clockwise") }.disabled(!state.googleConnected)
+                    Button { state.refreshInbox() } label: { Label("Scan", systemImage: "arrow.clockwise") }
+                        .disabled(!state.googleConnected || state.scanning)
+                        .help(state.lastScan.map { "Last scan: \($0.formatted(date: .omitted, time: .shortened)) — the Inbox also scans when you open it" } ?? "Scan the mailbox")
+                    if state.scanning { ProgressView().controlSize(.small) }
                     Toggle("Unread only", isOn: $unreadOnly).toggleStyle(.switch).controlSize(.small)
                         .help("Show only mails that are unread in Gmail")
                     Toggle("Important only", isOn: $importantOnly).toggleStyle(.switch).controlSize(.small)
@@ -179,6 +182,7 @@ struct InboxView: View {
             .glassPanel(cornerRadius: 22)
             .padding(.leading, 6)
         }
+        .onAppear { state.scanInboxIfStale() }
         // new member/contact: reviewed in a pop-up in front of everything
         .sheet(isPresented: Binding(get: { state.reviewingProposal != nil }, set: { if !$0 { state.reviewingProposal = nil } })) {
             if let id = state.reviewingProposal, let p = state.inbox.first(where: { $0.id == id })?.proposal {
@@ -269,6 +273,55 @@ struct MessageDetail: View {
     }
 }
 
+/// CC recipients of a reply: everyone on the original mail by default, plus Salesforce users on request.
+struct CCRow: View {
+    @Environment(AppState.self) private var state
+    let itemId: String
+    let cc: [String]
+    @State private var typed = ""
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text("CC").font(.caption.bold()).foregroundStyle(.secondary).frame(width: 22, alignment: .leading)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 4) {
+                    if cc.isEmpty { Text("nobody").font(.caption).foregroundStyle(.tertiary) }
+                    ForEach(cc, id: \.self) { a in
+                        HStack(spacing: 3) {
+                            Text(name(for: a)).font(.caption)
+                            Button { state.setReplyCC(itemId, cc.filter { $0 != a }) } label: { Image(systemName: "xmark.circle.fill") }
+                                .buttonStyle(.plain).foregroundStyle(.secondary).help("Remove \(a)")
+                        }
+                        .padding(.horizontal, 7).padding(.vertical, 2)
+                        .background(.quaternary, in: Capsule())
+                        .help(a)
+                    }
+                }
+            }
+            TextField("add address", text: $typed).textFieldStyle(.roundedBorder).font(.caption).frame(width: 150)
+                .onSubmit { add(typed) }
+            Menu {
+                let available = state.users.filter { !$0.email.isEmpty && !cc.contains($0.email) && $0.email != state.myMailAddress }
+                if available.isEmpty { Text(state.users.isEmpty ? "Salesforce users not loaded" : "Everyone is already in CC") }
+                ForEach(available, id: \.id) { u in Button("\(u.name) <\(u.email)>") { add(u.email) } }
+            } label: { Label("Add CC", systemImage: "person.badge.plus") }
+            .menuStyle(.borderlessButton).fixedSize()
+            .help("Add a Salesforce user (team member) in CC")
+        }
+    }
+
+    private func add(_ address: String) {
+        let a = EmailRules.address(from: address)
+        guard EmailRules.isValid(a), !cc.contains(a) else { return }
+        state.setReplyCC(itemId, cc + [a])
+        typed = ""
+    }
+
+    private func name(for address: String) -> String {
+        state.users.first { $0.email == address }?.name ?? address
+    }
+}
+
 /// Reply composer pinned below the message: Gemini drafts, the user edits and sends.
 struct ReplyPanel: View {
     @Environment(AppState.self) private var state
@@ -291,6 +344,7 @@ struct ReplyPanel: View {
                         .buttonStyle(.plain).help(expanded ? "Fold the reply panel" : "Show the reply panel")
                 }
                 if expanded {
+                    CCRow(itemId: itemId, cc: state.replyCC(for: item))
                     if item.draft == nil {
                         HStack {
                             Button("Draft reply with Gemini") { state.draftReply(itemId) }.disabled(!state.gemini.isConfigured)
@@ -322,7 +376,7 @@ struct ReplyPanel: View {
             .padding(14)
             .background(.regularMaterial)
             .overlay(alignment: .top) { Divider() }
-            .confirmationDialog("Send this reply to \(item.message.fromAddress) via Gmail?", isPresented: $confirmSend) {
+            .confirmationDialog("Send this reply to \(item.message.fromAddress)\(state.replyCC(for: item).isEmpty ? "" : " (CC: \(state.replyCC(for: item).joined(separator: ", ")))") via Gmail?", isPresented: $confirmSend) {
                 Button("Send") { state.sendManually(itemId) }
             }
         }

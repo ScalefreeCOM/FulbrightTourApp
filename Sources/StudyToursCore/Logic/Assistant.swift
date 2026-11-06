@@ -165,8 +165,17 @@ public enum Assistant {
         return (system, prompt)
     }
 
-    public static func replyPrompt(_ m: MailMessage, sender: SenderKind = .attendee, tour: Tour, knowledgeBase: String = "",
-                                   settings: AssistantSettings, redact doRedact: Bool) -> (system: String, prompt: String) {
+    /// "Reply all" CCs: the original To and Cc recipients, without the sender and the team's own mailbox.
+    public static func replyCC(_ m: MailMessage, ownAddress: String) -> [String] {
+        var seen: Set<String> = [m.fromAddress, ownAddress.lowercased()]
+        return (EmailRules.addresses(from: m.to) + EmailRules.addresses(from: m.cc)).filter { seen.insert($0).inserted }
+    }
+
+    public static func replyPrompt(_ m: MailMessage, sender: SenderKind = .attendee, greeting: String? = nil, tour: Tour,
+                                   knowledgeBase: String = "", settings: AssistantSettings, redact doRedact: Bool) -> (system: String, prompt: String) {
+        let greetingRule = greeting.map { $0.trimmingCharacters(in: .whitespaces) }.flatMap { $0.isEmpty ? nil : $0 }
+            .map { "Start the body with exactly this greeting line: \"\($0)\"" }
+            ?? "Start the body with a greeting line that fits the sender and the language, e.g. \"Dear Jane,\" or \"Dear Ms. Doe,\"."
         let who: String
         switch sender {
         case .official: who = """
@@ -184,6 +193,7 @@ public enum Assistant {
         If the answer needs information you do not have, set "confident" to false, list it in "missingInfo", \
         and put a placeholder like [CHECK: what is missing] in the body.
         Never ask anyone to send passport numbers or other ID data by email.
+        \(greetingRule)
         Do not include a signature; it is appended automatically.
         Respond ONLY with JSON: {"subject": string, "body": string, "confident": bool, "missingInfo": [string]}
         """

@@ -347,6 +347,17 @@ public enum EmailRules {
         }
         return header.lowercased().trimmingCharacters(in: .whitespaces)
     }
+    /// All addresses in a To/Cc header ("A <a@x.org>, \"Doe, Jane\" <j@y.org>") — commas inside quotes are kept.
+    public static func addresses(from header: String) -> [String] {
+        var parts: [String] = [], current = "", quoted = false
+        for ch in header {
+            if ch == "\"" { quoted.toggle() }
+            if ch == ",", !quoted { parts.append(current); current = "" } else { current.append(ch) }
+        }
+        parts.append(current)
+        return parts.map { address(from: $0) }.filter(isValid)
+    }
+
     public static func displayName(from header: String) -> String {
         if let l = header.lastIndex(of: "<") {
             let n = header[..<l].trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: "\""))

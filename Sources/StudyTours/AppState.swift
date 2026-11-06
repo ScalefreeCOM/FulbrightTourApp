@@ -35,6 +35,8 @@ struct InboxItem: Identifiable, Hashable {
     var answered: Bool = false
     var logged: Bool = false
     var proposal: RecordProposal?
+    /// CC recipients of the reply; nil = not edited yet (defaults to "reply all").
+    var replyCC: [String]?
 }
 
 enum SidebarItem: Hashable {
@@ -71,7 +73,9 @@ final class AppState {
     var syncStatus = "Local only"
     var showNewProgram = false
     var currentUserId: String?
-    var users: [(id: String, name: String)] = []
+    var users: [(id: String, name: String, email: String)] = []
+    /// Address of the shared mailbox (never CC'd on replies).
+    var myMailAddress = ""
     var lastSavedBasics: [String: Basics] = [:]
     private var pendingProgramSave: Task<Void, Never>?
     var storageMissingFields: [String] = []
@@ -84,6 +88,8 @@ final class AppState {
     private(set) var geminiConfigured = false
     /// The saved Gemini key is the sponsored one (footer: "Gemini AI is sponsored by Scalefree").
     private(set) var geminiSponsored = false
+    /// Gemini tokens used on this Mac since the counter was introduced (kept across launches).
+    private(set) var geminiTokensUsed: Int = UserDefaults.standard.integer(forKey: "geminiTokensUsed")
 
     // host visits (Opportunities) and attendee-list drafts
     var hostVisits: [HostVisit] = []
@@ -130,6 +136,13 @@ final class AppState {
         salesforce = SalesforceClient(settings: d.settings.salesforce)
         google = GoogleClient(settings: d.settings.google)
         gemini = GeminiClient(settings: d.settings.gemini)
+        gemini.onUsage = { [weak self] tokens in
+            Task { @MainActor in
+                guard let self else { return }
+                self.geminiTokensUsed += tokens
+                UserDefaults.standard.set(self.geminiTokensUsed, forKey: "geminiTokensUsed")
+            }
+        }
         gemini.onModelChanged = { [weak self] model in
             Task { @MainActor in
                 self?.settings.gemini.model = model
@@ -663,13 +676,28 @@ final class AppState {
             while !Task.isCancelled {
                 let minutes = max(self?.settings.assistant.pollMinutes ?? 0, 5)
                 try? await Task.sleep(for: .seconds(Double(minutes) * 60))
-                guard let self, self.google.isConnected, self.busy == nil, self.settings.assistant.pollMinutes > 0 else { continue }
+                guard let self, self.google.isConnected, self.busy == nil, !self.scanning, self.settings.assistant.pollMinutes > 0 else { continue }
+                self.scanning = true
                 await self.processInbox()
+                self.scanning = false
             }
         }
     }
 
-    func refreshInbox() { run("Scanning inbox…") { await self.processInbox() } }
+    private(set) var scanning = false
+
+    func refreshInbox() {
+        guard !scanning else { return }   // never two scans at once
+        scanning = true
+        run("Scanning inbox…") { defer { self.scanning = false }; await self.processInbox() }
+    }
+
+    /// Opening the Inbox scans automatically, unless the last scan is less than `maxAge` seconds old.
+    func scanInboxIfStale(maxAge: TimeInterval = 120) {
+        guard googleConnected, !scanning else { return }
+        if let last = lastScan, Date().timeIntervalSince(last) < maxAge { return }
+        refreshInbox()
+    }
 
     private func lookupSender(_ address: String) async -> [SFRecordRef] {
         if let c = senderCache[address] { return c }
@@ -687,6 +715,7 @@ final class AppState {
     func processInbox() async {
         let s = settings
         do {
+            if myMailAddress.isEmpty { myMailAddress = (try? await google.myAddress()) ?? "" }
             let messages = try await google.listMessages(query: s.google.inboxQuery, max: 50)
             let kb = await knowledgeBaseText()
             let loggedLabel = try await google.labelId("Study Tour/Logged")
@@ -744,7 +773,7 @@ final class AppState {
                 // 5. draft a reply for every mail that needs one — the user reviews and sends it, nothing is sent automatically
                 if !item.answered, identity.kind != .team, let t = item.triage, t.needsReply,
                    t.relatedToTour || identity.kind != .unknown, item.draft == nil, gemini.isConfigured {
-                    let p = Assistant.replyPrompt(m, sender: identity.kind, tour: tour, knowledgeBase: kb,
+                    let p = Assistant.replyPrompt(m, sender: identity.kind, greeting: identity.record?.greeting, tour: tour, knowledgeBase: kb,
                                                   settings: s.assistant, redact: s.gemini.redactNumbers)
                     if let text = try? await gemini.generate(system: p.system, prompt: p.prompt, json: true, temperature: 0.3),
                        let d = Assistant.decode(DraftReply.self, from: text) {
@@ -767,11 +796,11 @@ final class AppState {
     /// Sends from the Fulbright Gmail account (full thread stays in Gmail), then logs it as an
     /// activity on the Lead / Contact (+ Account) in Salesforce.
     @discardableResult
-    func sendViaGmail(to: String, subject: String, body: String, threadId: String? = nil,
+    func sendViaGmail(to: String, cc: [String] = [], subject: String, body: String, threadId: String? = nil,
                       inReplyTo: String? = nil, references: String? = nil,
                       attachments: [MailComposer.Attachment] = [],
                       whoId: String?, whatId: String?) async throws -> String {
-        let raw = MailComposer.raw(to: to, subject: subject, body: body, attachments: attachments,
+        let raw = MailComposer.raw(to: to, cc: cc, subject: subject, body: body, attachments: attachments,
                                    inReplyTo: inReplyTo, references: references)
         try await google.send(raw: raw, threadId: threadId)
         guard let whoId else { return "Sent via Gmail (no Salesforce record to log on)" }
@@ -783,6 +812,15 @@ final class AppState {
         } catch {
             return "Sent via Gmail — logging in Salesforce failed: \(error.localizedDescription)"
         }
+    }
+
+    /// CCs for the reply: what the user set, else everyone who was on the original mail ("reply all").
+    func replyCC(for item: InboxItem) -> [String] {
+        item.replyCC ?? Assistant.replyCC(item.message, ownAddress: myMailAddress)
+    }
+
+    func setReplyCC(_ itemId: String, _ cc: [String]) {
+        if let i = inbox.firstIndex(where: { $0.id == itemId }) { inbox[i].replyCC = cc }
     }
 
     /// Replies in the original Gmail thread and marks the message as answered.
@@ -797,7 +835,7 @@ final class AppState {
             try? await google.addLabels(m.id, names: ["Study Tour/Logged"])
         }
         // outgoing reply via Gmail (same thread), logged on the member
-        let how = try await sendViaGmail(to: m.fromAddress, subject: Assistant.replySubject(m.subject), body: full,
+        let how = try await sendViaGmail(to: m.fromAddress, cc: replyCC(for: item), subject: Assistant.replySubject(m.subject), body: full,
                                          threadId: m.threadId, inReplyTo: m.rfcMessageId, references: m.references,
                                          whoId: item.identity.record?.id, whatId: item.identity.record?.accountId)
         try? await google.addLabels(m.id, names: [settings.google.answeredLabel])
@@ -824,9 +862,10 @@ final class AppState {
         guard let i = inbox.firstIndex(where: { $0.id == itemId }) else { return }
         let m = inbox[i].message
         let sender = inbox[i].identity.kind
+        let greeting = inbox[i].identity.record?.greeting
         run("Drafting reply with Gemini…") {
             let kb = await self.knowledgeBaseText()
-            let p = Assistant.replyPrompt(m, sender: sender, tour: self.tour, knowledgeBase: kb, settings: self.settings.assistant, redact: self.settings.gemini.redactNumbers)
+            let p = Assistant.replyPrompt(m, sender: sender, greeting: greeting, tour: self.tour, knowledgeBase: kb, settings: self.settings.assistant, redact: self.settings.gemini.redactNumbers)
             let text = try await self.gemini.generate(system: p.system, prompt: p.prompt, json: true, temperature: 0.3)
             guard let d = Assistant.decode(DraftReply.self, from: text) else { throw AppError("Could not read Gemini's reply") }
             if let j = self.inbox.firstIndex(where: { $0.id == itemId }) {
@@ -902,7 +941,9 @@ final class AppState {
             self.inbox[i].identity = SenderIdentity(kind: p.kind == .lead ? .attendee : .official,
                 record: SFRecordRef(kind: p.kind == .lead ? .lead : .contact, id: whoId, name: "\(p.firstName) \(p.lastName)",
                                     email: p.email, accountId: whatId, accountName: p.organization,
-                                    vip: p.kind == .contact && p.vip), source: "Created now")
+                                    vip: p.kind == .contact && p.vip,
+                                    greeting: p.kind == .contact ? Assistant.defaultGreeting(suggested: p.greeting, firstName: p.firstName) : nil),
+                source: "Created now")
             self.flash("\(p.kind.displayName.capitalized) created and email logged")
         }
     }

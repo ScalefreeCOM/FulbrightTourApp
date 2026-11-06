@@ -11,12 +11,13 @@ public enum MailComposer {
     }
 
     /// Message with attachments (multipart/mixed).
-    public static func raw(to: String, subject: String, body: String, attachments: [Attachment],
+    public static func raw(to: String, cc: [String] = [], subject: String, body: String, attachments: [Attachment],
                            inReplyTo: String? = nil, references: String? = nil) -> String {
-        guard !attachments.isEmpty else { return raw(to: to, subject: subject, body: body, inReplyTo: inReplyTo, references: references) }
+        guard !attachments.isEmpty else { return raw(to: to, cc: cc, subject: subject, body: body, inReplyTo: inReplyTo, references: references) }
         let boundary = "studytours-\(UUID().uuidString)"
         var headers = ["To: \(to)", "Subject: \(encodeHeader(subject))", "MIME-Version: 1.0",
                        "Content-Type: multipart/mixed; boundary=\"\(boundary)\""]
+        if !cc.isEmpty { headers.insert("Cc: \(cc.joined(separator: ", "))", at: 1) }
         if let inReplyTo, !inReplyTo.isEmpty {
             headers.append("In-Reply-To: \(inReplyTo)")
             headers.append("References: \([references ?? "", inReplyTo].filter { !$0.isEmpty }.joined(separator: " "))")
@@ -31,7 +32,7 @@ public enum MailComposer {
         return PKCE.b64url(Data(message.utf8))
     }
 
-    public static func raw(to: String, subject: String, body: String,
+    public static func raw(to: String, cc: [String] = [], subject: String, body: String,
                            inReplyTo: String? = nil, references: String? = nil) -> String {
         var headers = [
             "To: \(to)",
@@ -40,6 +41,7 @@ public enum MailComposer {
             "Content-Type: text/plain; charset=UTF-8",
             "Content-Transfer-Encoding: base64",
         ]
+        if !cc.isEmpty { headers.insert("Cc: \(cc.joined(separator: ", "))", at: 1) }
         if let inReplyTo, !inReplyTo.isEmpty {
             headers.append("In-Reply-To: \(inReplyTo)")
             let refs = [references ?? "", inReplyTo].filter { !$0.isEmpty }.joined(separator: " ")

@@ -407,15 +407,20 @@ struct PartnerFooter: View {
             Spacer()
             // App and Salesforce backend are built and maintained by Scalefree
             let sponsored = state.geminiSponsored
+            let tokens = state.geminiTokensUsed.formatted(.number.notation(.compactName))
             if !sponsored && state.geminiConfigured {
                 // someone else's key: say so, separate from the Scalefree credit
-                Text("Custom Gemini AI key applied").font(.caption).foregroundStyle(.white.opacity(0.7))
+                Text("Custom Gemini AI key applied · \(tokens) tokens used").font(.caption).foregroundStyle(.white.opacity(0.7))
                     .padding(.trailing, 10)
+                    .help("\(state.geminiTokensUsed.formatted()) Gemini tokens used on this Mac")
             }
             HStack(spacing: 8) {
                 VStack(alignment: .trailing, spacing: 1) {
                     Text("Created and maintained by")
-                    if sponsored { Text("Gemini AI is sponsored by") }
+                    if sponsored {
+                        Text("Gemini AI (\(tokens) tokens used) is sponsored by")
+                            .help("\(state.geminiTokensUsed.formatted()) Gemini tokens used on this Mac")
+                    }
                 }
                 .font(.caption).foregroundStyle(.white.opacity(0.8))
                 if let sf = BrandImage.load("scalefree-white", trimWhitespace: false) {

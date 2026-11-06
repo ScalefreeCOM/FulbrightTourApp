@@ -16,10 +16,13 @@ public struct SFRecordRef: Identifiable, Hashable, Sendable {
     public let accountName: String?
     /// Contact marked as VIP in Salesforce (official role or the person visited).
     public var vip: Bool
+    /// Salutation stored on the Contact (Greeting__c), used as the first line of replies.
+    public var greeting: String?
 
-    public init(kind: Kind, id: String, name: String, email: String, accountId: String?, accountName: String?, vip: Bool = false) {
+    public init(kind: Kind, id: String, name: String, email: String, accountId: String?, accountName: String?,
+                vip: Bool = false, greeting: String? = nil) {
         self.kind = kind; self.id = id; self.name = name; self.email = email
-        self.accountId = accountId; self.accountName = accountName; self.vip = vip
+        self.accountId = accountId; self.accountName = accountName; self.vip = vip; self.greeting = greeting
     }
 }
 
@@ -283,9 +286,9 @@ public final class SalesforceClient: @unchecked Sendable {
 
     // MARK: Users
 
-    public func activeUsers() async throws -> [(id: String, name: String)] {
-        try await query("SELECT Id, Name FROM User WHERE IsActive = true AND UserType = 'Standard' ORDER BY Name LIMIT 500")
-            .map { ($0["Id"] as? String ?? "", $0["Name"] as? String ?? "") }
+    public func activeUsers() async throws -> [(id: String, name: String, email: String)] {
+        try await query("SELECT Id, Name, Email FROM User WHERE IsActive = true AND UserType = 'Standard' ORDER BY Name LIMIT 500")
+            .map { ($0["Id"] as? String ?? "", $0["Name"] as? String ?? "", ($0["Email"] as? String ?? "").lowercased()) }
     }
 
     public func currentUserId() async throws -> String? {
@@ -555,12 +558,14 @@ public final class SalesforceClient: @unchecked Sendable {
         SFRecordRef(kind: .contact, id: r["Id"] as? String ?? "", name: r["Name"] as? String ?? "",
                     email: r["Email"] as? String ?? "", accountId: r["AccountId"] as? String,
                     accountName: (r["Account"] as? [String: Any])?["Name"] as? String,
-                    vip: r[F.vip] as? Bool ?? false)
+                    vip: r[F.vip] as? Bool ?? false, greeting: r[F.greeting] as? String)
     }
 
     /// Contact fields for lookups; the VIP flag only if the org has it.
     private func contactFields() async throws -> String {
-        "Id, Name, Email, AccountId, Account.Name" + (try await hasContactVIP() ? ", \(F.vip)" : "")
+        let available = try await fieldNames(of: "Contact")
+        return (["Id", "Name", "Email", "AccountId", "Account.Name"] + [F.vip, F.greeting].filter(available.contains))
+            .joined(separator: ", ")
     }
 
     public func hasContactVIP() async throws -> Bool { try await fieldNames(of: "Contact").contains(F.vip) }

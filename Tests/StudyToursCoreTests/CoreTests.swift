@@ -201,6 +201,24 @@ final class AssistantTests: XCTestCase {
         XCTAssertEqual(oauth.localizedDescription, "Salesforce auth error 400: expired access/refresh token")
     }
 
+    func testReplyAllCCAndGreeting() {
+        XCTAssertEqual(EmailRules.addresses(from: #""Doe, Jane" <Jane@Example.com>, john.roe@ministry.example.org"#),
+                       ["jane@example.com", "john.roe@ministry.example.org"])
+        var m = msg(from: "John Roe <john.roe@ministry.example.org>")
+        m.cc = "Assistant <assistant@ministry.example.org>, tour@example.com"
+        // original To (our mailbox) and the sender are not CC'd; everyone else is
+        XCTAssertEqual(Assistant.replyCC(m, ownAddress: "tour@example.com"), ["assistant@ministry.example.org"])
+        // Cc header is written
+        let raw = MailComposer.raw(to: "a@example.com", cc: ["b@example.com", "c@example.com"], subject: "Hi", body: "x")
+        let decoded = String(data: Data(base64Encoded: raw.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+            .padding(toLength: ((raw.count + 3) / 4) * 4, withPad: "=", startingAt: 0)) ?? Data(), encoding: .utf8) ?? ""
+        XCTAssertTrue(decoded.contains("Cc: b@example.com, c@example.com"))
+        // Salesforce greeting becomes the required first line
+        let p = Assistant.replyPrompt(m, sender: .official, greeting: "Dear Mr. Roe:", tour: tour(), settings: AssistantSettings(), redact: true)
+        XCTAssertTrue(p.system.contains(#"exactly this greeting line: "Dear Mr. Roe:""#))
+        XCTAssertTrue(Assistant.replyPrompt(m, tour: tour(), settings: AssistantSettings(), redact: true).system.contains("Start the body with a greeting line"))
+    }
+
     func testEmailHeaderParsing() {
         XCTAssertEqual(EmailRules.address(from: "\"Jane Doe\" <Jane@Example.com>"), "jane@example.com")
         XCTAssertEqual(EmailRules.displayName(from: "\"Jane Doe\" <jane@example.com>"), "Jane Doe")

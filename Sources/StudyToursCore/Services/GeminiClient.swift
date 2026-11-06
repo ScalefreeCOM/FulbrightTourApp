@@ -5,6 +5,8 @@ public final class GeminiClient: @unchecked Sendable {
     public var settings: GeminiSettings
     /// Called when Google retired the configured model and the client switched to the successor it named.
     public var onModelChanged: (@Sendable (String) -> Void)?
+    /// Called with the total tokens (prompt + answer) of every successful request.
+    public var onUsage: (@Sendable (Int) -> Void)?
     public init(settings: GeminiSettings) { self.settings = settings }
 
     public var isConfigured: Bool { !(Keychain.get(Keychain.Key.geminiKey) ?? "").isEmpty }
@@ -41,6 +43,7 @@ public final class GeminiClient: @unchecked Sendable {
             onModelChanged?(next)
             r = try await request("models/\(next):generateContent", method: "POST", body: body) as? [String: Any] ?? [:]
         }
+        if let usage = r["usageMetadata"] as? [String: Any], let total = usage["totalTokenCount"] as? Int { onUsage?(total) }
         let parts = ((r["candidates"] as? [[String: Any]])?.first?["content"] as? [String: Any])?["parts"] as? [[String: Any]] ?? []
         let text = parts.compactMap { $0["text"] as? String }.joined()
         guard !text.isEmpty else { throw AppError("Gemini returned no text (possibly blocked by safety filters).") }

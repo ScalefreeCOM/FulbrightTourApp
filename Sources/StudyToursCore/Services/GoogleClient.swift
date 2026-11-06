@@ -13,6 +13,8 @@ public struct MailMessage: Identifiable, Hashable, Sendable {
     /// RFC 822 Message-ID and References headers — needed to thread replies in Gmail.
     public var rfcMessageId: String = ""
     public var references: String = ""
+    /// Cc header of the incoming mail.
+    public var cc: String = ""
 
     public var fromAddress: String { EmailRules.address(from: from) }
     public var fromName: String { EmailRules.displayName(from: from) }
@@ -145,7 +147,8 @@ public final class GoogleClient: @unchecked Sendable {
                            to: headers["to"] ?? "", subject: headers["subject"] ?? "(no subject)",
                            date: Date(timeIntervalSince1970: ms / 1000), snippet: m["snippet"] as? String ?? "",
                            body: MailBody.extract(payload), labelIds: m["labelIds"] as? [String] ?? [],
-                           rfcMessageId: headers["message-id"] ?? "", references: headers["references"] ?? "")
+                           rfcMessageId: headers["message-id"] ?? "", references: headers["references"] ?? "",
+                           cc: headers["cc"] ?? "")
     }
 
     /// Sends from the signed-in Gmail account (keeps the full thread in Gmail). Returns the Gmail message id.
@@ -155,6 +158,16 @@ public final class GoogleClient: @unchecked Sendable {
         if let threadId, !threadId.isEmpty { body["threadId"] = threadId }
         let r = try await call("POST", "https://gmail.googleapis.com/gmail/v1/users/me/messages/send", json: body) as? [String: Any] ?? [:]
         return r["id"] as? String ?? ""
+    }
+
+    private var myAddressCache: String?
+    /// Address of the signed-in mailbox (excluded from reply CCs).
+    public func myAddress() async throws -> String {
+        if let a = myAddressCache { return a }
+        let r = try await call("GET", "https://gmail.googleapis.com/gmail/v1/users/me/profile") as? [String: Any] ?? [:]
+        let a = (r["emailAddress"] as? String ?? "").lowercased()
+        myAddressCache = a
+        return a
     }
 
     public func labelId(_ name: String) async throws -> String {

@@ -193,7 +193,8 @@ documents and calendar live in **Google Workspace**; **Google Gemini** helps wit
 
 **Email assistant.** The app scans the shared mailbox, recognizes who wrote (members, officials and their offices,
 the team), and drafts a reply for every email that needs one from the email and the knowledge base (a Google Doc) —
-formal for officials. **Nothing is ever sent automatically:** you review and edit each draft and click Send; the
+formal for officials and starting with the greeting stored on the contact. Replies keep everyone who was in the
+original mail in CC, and you can add team members from the Salesforce user list. **Nothing is ever sent automatically:** you review and edit each draft and click Send; the
 reply goes out via Gmail in the original thread, the email is archived, and incoming and outgoing emails are
 recorded as activities on the member or contact in Salesforce. New general facts from approved answers are added to
 the knowledge base. Emails from officials are also highlighted under *At a Glance*, VIPs first.
@@ -254,7 +255,7 @@ cp config/studytours.config.example.json config/studytours.config.json
 | `agendaTemplateId` | Google Slides template copied into each tour folder |
 | `knowledgeBaseURL` | Default knowledge base (Google Doc) for the email assistant |
 | `googleChatSpace` | Optional: link to the team's Google Chat space (can also be picked in the app's Settings) |
-| `geminiSponsorKeySuffix` | Optional: last characters of a sponsored Gemini API key. With that key the footer says "Gemini AI is sponsored by" the maintainer; any other key shows "Custom Gemini AI key applied" |
+| `geminiSponsorKeySuffix` | Optional: last characters of a sponsored Gemini API key. With that key the footer says "Gemini AI (… tokens used) is sponsored by" the maintainer; any other key shows "Custom Gemini AI key applied · … tokens used". The token count is the lifetime total on that Mac |
 
 `config/studytours.config.json` is git-ignored. The build script bundles it into the app.
 
