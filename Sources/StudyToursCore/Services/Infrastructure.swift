@@ -48,7 +48,15 @@ public enum HTTP {
 public enum Keychain {
     static let service = "org.fulbright.studytours"
 
+    /// In-memory copy, so the Keychain is read once per item and launch (each read can trigger a password prompt).
+    private final class Cache: @unchecked Sendable {
+        let lock = NSLock()
+        var values: [String: String?] = [:]
+    }
+    private static let cache = Cache()
+
     public static func set(_ value: String?, for key: String) {
+        cache.lock.lock(); cache.values[key] = .some(value?.isEmpty == false ? value : nil); cache.lock.unlock()
         let base: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
                                    kSecAttrService as String: service,
                                    kSecAttrAccount as String: key]
@@ -61,6 +69,14 @@ public enum Keychain {
     }
 
     public static func get(_ key: String) -> String? {
+        cache.lock.lock(); defer { cache.lock.unlock() }
+        if let hit = cache.values[key] { return hit }
+        let value = read(key)
+        cache.values[key] = .some(value)
+        return value
+    }
+
+    private static func read(_ key: String) -> String? {
         let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
                                 kSecAttrService as String: service,
                                 kSecAttrAccount as String: key,

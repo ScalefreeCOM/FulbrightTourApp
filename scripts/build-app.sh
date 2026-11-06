@@ -54,5 +54,10 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 PLIST
 /usr/bin/sed -i '' "s|ICON_PLACEHOLDER|${ICON_PLIST}|" "$APP/Contents/Info.plist"
 
-codesign --force --deep --sign - "$APP"
+# Sign with a stable identity so the Keychain recognises rebuilt apps ("Always Allow" sticks).
+# Override with SIGN_IDENTITY=…; falls back to the first Apple Development certificate, else ad-hoc
+# (ad-hoc builds get a new identity each time, so macOS asks for the Keychain password after every rebuild).
+IDENTITY=${SIGN_IDENTITY:-$(security find-identity -v -p codesigning 2>/dev/null | awk '/Apple Development/ {print $2; exit}')}
+codesign --force --deep --sign "${IDENTITY:--}" "$APP"
+[[ -n "$IDENTITY" ]] || echo "Note: ad-hoc signed — the Keychain will ask again after each rebuild."
 echo "Built: $APP"
