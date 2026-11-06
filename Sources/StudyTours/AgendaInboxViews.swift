@@ -25,7 +25,7 @@ struct AgendaView: View {
                         if !tour.agendaDocId.isEmpty, let u = GoogleClient.fileURL(tour.agendaDocId) { Link("Agenda doc", destination: u) }
                         Button { state.syncAgenda() } label: { Label("Sync now (\(tour.agenda.filter(\.needsSync).count) pending)", systemImage: "arrow.triangle.2.circlepath") }
                             .buttonStyle(.borderedProminent).tint(Theme.fbBlue)
-                            .disabled(!state.salesforce.isConnected && !state.google.isConnected)
+                            .disabled(!state.salesforceConnected && !state.googleConnected)
                         Button { state.shareToTeam(agendaText()) } label: { Image(systemName: "bubble.left.and.bubble.right") }.help("Post the agenda to the team chat (you review it before sending)")
                     }
                 }
@@ -132,7 +132,7 @@ struct InboxView: View {
         HSplitView {
             VStack(spacing: 0) {
                 HStack {
-                    Button { state.refreshInbox() } label: { Label("Scan", systemImage: "arrow.clockwise") }.disabled(!state.google.isConnected)
+                    Button { state.refreshInbox() } label: { Label("Scan", systemImage: "arrow.clockwise") }.disabled(!state.googleConnected)
                     Toggle("Important only", isOn: $importantOnly).toggleStyle(.switch).controlSize(.small)
                     Spacer()
                     if state.settings.assistant.autoSend { Label("Auto-reply on", systemImage: "bolt.fill").font(.caption).foregroundStyle(Theme.skyOnDark) }
@@ -159,7 +159,7 @@ struct InboxView: View {
                     .tag(item.id)
                 }
                 .scrollContentBackground(.hidden)
-                if !state.google.isConnected { Text("Connect Google in Settings to scan the Fulbright mailbox.").font(.caption).padding() }
+                if !state.googleConnected { Text("Connect Google in Settings to scan the Fulbright mailbox.").font(.caption).padding() }
             }
             .frame(minWidth: 260, idealWidth: 330)
             .glassPanel(cornerRadius: 22)

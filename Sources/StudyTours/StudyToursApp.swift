@@ -20,7 +20,7 @@ struct StudyToursApp: App {
                 .onAppear {
                     NSApp.activate(ignoringOtherApps: true)
                     Task { await state.refreshMetrics() }
-                    if state.salesforce.isConnected { state.loadPrograms() }
+                    if state.salesforceConnected { state.loadPrograms() }
                     Snapshot.runIfRequested(state)
                 }
         }
@@ -28,7 +28,7 @@ struct StudyToursApp: App {
         .commands {
             CommandGroup(after: .newItem) {
                 Button("New Study Tour…") { state.showNewProgram = true }.keyboardShortcut("n", modifiers: [.command, .shift])
-                    .disabled(!state.salesforce.isConnected)
+                    .disabled(!state.salesforceConnected)
             }
             CommandMenu("Tour") {
                 Button("Scan Inbox") { state.refreshInbox() }.keyboardShortcut("r")
@@ -160,7 +160,7 @@ struct ProgramSelector: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("SALESFORCE PROGRAM").font(.caption2.bold()).kerning(1).opacity(0.6).padding(.horizontal, 4)
-            if !state.salesforce.isConnected {
+            if !state.salesforceConnected {
                 Text(state.tourTitle).font(.callout).padding(.horizontal, 4)
                 Button { state.selection = .settings } label: {
                     Label("Connect Salesforce…", systemImage: "link").frame(maxWidth: .infinity)
@@ -320,8 +320,8 @@ struct MonitoringPanel: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Connections").font(.caption).opacity(0.75)
-                    ConnectionDot(name: "Salesforce", on: state.salesforce.isConnected)
-                    ConnectionDot(name: "Google", on: state.google.isConnected)
+                    ConnectionDot(name: "Salesforce", on: state.salesforceConnected)
+                    ConnectionDot(name: "Google", on: state.googleConnected)
                     ConnectionDot(name: "Gemini", on: state.gemini.isConfigured)
                     if let s = state.lastScan { Text("Inbox scanned \(s.formatted(date: .omitted, time: .shortened))").font(.caption2).opacity(0.6) }
                 }

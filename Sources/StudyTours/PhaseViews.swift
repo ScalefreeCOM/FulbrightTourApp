@@ -179,7 +179,7 @@ struct SetupTools: View {
                         if let u = state.salesforce.recordURL(p.id) { Link("Open", destination: u) } }
                 }
             }
-            if !state.salesforce.isConnected { Text("Connect Salesforce in Settings first.").font(.caption).foregroundStyle(.secondary) }
+            if !state.salesforceConnected { Text("Connect Salesforce in Settings first.").font(.caption).foregroundStyle(.secondary) }
         }
         Card(title: "Google Drive") {
             Text("Each study tour has its own folder in the shared study tours folder, named like the program, with a copy of the agenda template. Both links are stored on the program.")
@@ -190,7 +190,7 @@ struct SetupTools: View {
                 if !state.tour.agendaDocId.isEmpty, let u = URL(string: DriveStructure.slidesURL(state.tour.agendaDocId)) { Link("Open agenda", destination: u) }
                 Spacer()
                 Button("Create folder & agenda") { state.createDriveFolder() }
-                    .disabled(!state.google.isConnected || !state.salesforce.isConnected || state.tour.campaignId.isEmpty || !state.tour.driveFolderId.isEmpty)
+                    .disabled(!state.googleConnected || !state.salesforceConnected || state.tour.campaignId.isEmpty || !state.tour.driveFolderId.isEmpty)
             }
         }
     }
@@ -208,7 +208,7 @@ struct HostsTools: View {
                 Text("Stages: Qualification = identified · Needs Analysis = letter sent · Proposal/Negotiation = in discussion · Closed Won = confirmed · Closed Lost = declined")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                Button("Reload") { state.loadHostVisits() }.disabled(!state.salesforce.isConnected || state.tour.campaignId.isEmpty)
+                Button("Reload") { state.loadHostVisits() }.disabled(!state.salesforceConnected || state.tour.campaignId.isEmpty)
             }
             if state.hostVisits.isEmpty {
                 Text(state.tour.campaignId.isEmpty ? "Select the program first." : "No Opportunities linked to this program yet — create them in Salesforce (Program field on the Opportunity).")
@@ -228,7 +228,7 @@ struct HostsTools: View {
                 }
             }
         }
-        .task(id: state.tour.campaignId) { if state.hostVisits.isEmpty && state.salesforce.isConnected { state.loadHostVisits() } }
+        .task(id: state.tour.campaignId) { if state.hostVisits.isEmpty && state.salesforceConnected { state.loadHostVisits() } }
     }
 }
 
@@ -281,7 +281,7 @@ struct RegistrationTools: View {
         @Bindable var state = state
         Card(title: "Members (Salesforce Leads in the tour program)") {
             HStack {
-                Button("Load from Salesforce") { state.loadParticipants() }.disabled(!state.salesforce.isConnected)
+                Button("Load from Salesforce") { state.loadParticipants() }.disabled(!state.salesforceConnected)
                 Button("Run cleansing & passport check") { state.runCleansing() }.disabled(state.participants.isEmpty)
                 Spacer()
                 Text("\(state.participants.count) members").foregroundStyle(.secondary)
@@ -346,8 +346,8 @@ struct SubmissionTools: View {
             HStack {
                 Text("\(state.participants.count) attending members loaded").font(.caption)
                 Spacer()
-                Button("Reload members") { state.loadParticipants() }.disabled(!state.salesforce.isConnected)
-                Button("Reload visits") { state.loadHostVisits() }.disabled(!state.salesforce.isConnected)
+                Button("Reload members") { state.loadParticipants() }.disabled(!state.salesforceConnected)
+                Button("Reload visits") { state.loadHostVisits() }.disabled(!state.salesforceConnected)
             }
         }
         ForEach(state.hostVisits.filter { !$0.isDeclined }) { v in HostListCard(visit: v) }
@@ -357,7 +357,7 @@ struct SubmissionTools: View {
             let diets = Dictionary(grouping: state.participants.map { $0[.dietary].trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }, by: { $0.lowercased() })
             ForEach(diets.keys.sorted(), id: \.self) { k in LabeledContent(diets[k]!.first!, value: "\(diets[k]!.count)") }
         }
-        .task(id: state.tour.campaignId) { if state.hostVisits.isEmpty && state.salesforce.isConnected { state.loadHostVisits() } }
+        .task(id: state.tour.campaignId) { if state.hostVisits.isEmpty && state.salesforceConnected { state.loadHostVisits() } }
     }
 }
 
@@ -387,7 +387,7 @@ struct HostListCard: View {
                 Spacer()
                 Button(draft == nil ? "Prepare list" : "Prepare again") { state.prepareHostList(visit) }
                     .glassButton()
-                    .disabled(!state.salesforce.isConnected || state.tour.campaignId.isEmpty)
+                    .disabled(!state.salesforceConnected || state.tour.campaignId.isEmpty)
             }
             if let d = draft {
                 Divider()
@@ -426,7 +426,7 @@ struct HostListCard: View {
                     Spacer()
                     Button("Send to \(visit.recipientName.isEmpty ? "recipient" : visit.recipientName)") { confirmSend = true }
                         .glassButton(prominent: true)
-                        .disabled(visit.recipientEmail.isEmpty || d.filled == nil || !state.google.isConnected)
+                        .disabled(visit.recipientEmail.isEmpty || d.filled == nil || !state.googleConnected)
                 }
             }
         }
@@ -479,7 +479,7 @@ struct WrapUpTools: View {
             HStack {
                 Button("Clear fields in Salesforce…") { confirmSF = true }
                     .buttonStyle(.borderedProminent).tint(Theme.usRed)
-                    .disabled(scrubFields.isEmpty || !state.salesforce.isConnected)
+                    .disabled(scrubFields.isEmpty || !state.salesforceConnected)
                 Button("Delete all exported files…") { confirmFiles = true }.tint(Theme.usRed)
             }
         }
@@ -509,7 +509,7 @@ struct ThankYouTools: View {
                 if let p = state.tour.programs.first(where: { $0.purpose.contains("Thank") }) {
                     Label("Program: \(p.name)", systemImage: "checkmark.circle")
                 } else {
-                    Button("Create thank-you program in Salesforce") { state.createThankYouProgram() }.disabled(!state.salesforce.isConnected)
+                    Button("Create thank-you program in Salesforce") { state.createThankYouProgram() }.disabled(!state.salesforceConnected)
                 }
                 Spacer()
             }
@@ -579,9 +579,9 @@ struct KnowledgeBaseCard: View {
                 if let u = URL(string: state.knowledgeBaseURL) { Link("Open knowledge base document", destination: u) }
                 if state.knowledgeBaseURL != KnowledgeBase.defaultURL { Text("program-specific").font(.caption2).padding(3).background(.quaternary, in: Capsule()) }
                 Spacer()
-                Button("Reload") { Task { _ = await state.knowledgeBaseText(force: true) } }.disabled(!state.google.isConnected)
+                Button("Reload") { Task { _ = await state.knowledgeBaseText(force: true) } }.disabled(!state.googleConnected)
                 Button(editing ? "Cancel" : "Change…") { url = state.knowledgeBaseURL; editing.toggle() }
-                    .disabled(!state.salesforce.isConnected || state.tour.campaignId.isEmpty)
+                    .disabled(!state.salesforceConnected || state.tour.campaignId.isEmpty)
             }
             if editing {
                 HStack {

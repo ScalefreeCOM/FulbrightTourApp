@@ -26,7 +26,7 @@ struct TeamChatPanel: View {
                 Text(state.settings.google.chatSpaceTitle).font(.caption2).opacity(0.7).lineLimit(1)
             }
 
-            if !state.google.isConnected {
+            if !state.googleConnected {
                 placeholder("Connect Google in Settings to see the team chat.")
             } else if state.chatSpace.isEmpty {
                 placeholder("Choose the team's Google Chat space in Settings → Connections.")
@@ -144,7 +144,7 @@ struct ChatSpaceSettings: View {
             }
             .disabled(TeamChat.spaceName(from: pasted).isEmpty)
             Button("Load my spaces") { state.run("Loading Google Chat spaces…") { spaces = try await state.google.chatSpaces() } }
-                .disabled(!state.google.isConnected)
+                .disabled(!state.googleConnected)
         }
         Text("Messages are read and sent as the Google account signed in above. Create a space in Google Chat for the organising team and add that account.")
             .font(.caption).foregroundStyle(.secondary)

@@ -30,6 +30,21 @@ struct SecretField: View {
     }
 }
 
+/// Text that is shown as bullets until the eye button is pressed (client IDs / consumer keys).
+struct MaskedField: View {
+    let title: String
+    @Binding var text: String
+    @State private var revealed = false
+
+    var body: some View {
+        HStack {
+            if revealed { TextField(title, text: $text) } else { SecureField(title, text: $text) }
+            Button { revealed.toggle() } label: { Image(systemName: revealed ? "eye.slash" : "eye") }
+                .buttonStyle(.borderless).help(revealed ? "Hide" : "Show")
+        }
+    }
+}
+
 struct ConnectionsSettings: View {
     @Environment(AppState.self) private var state
     @State private var models: [String] = []
@@ -41,17 +56,17 @@ struct ConnectionsSettings: View {
             Section("Salesforce") {
                 LabeledContent("Organisation", value: SalesforceSettings.productionURL)
                 SchemaStatus()
-                TextField("Consumer Key (External Client App)", text: $state.settings.salesforce.clientId)
+                MaskedField(title: "Consumer Key (External Client App)", text: $state.settings.salesforce.clientId)
                 Text("Callback URL to register: http://localhost:\(state.settings.salesforce.callbackPort)/callback · OAuth scopes: api, refresh_token · PKCE on").font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
-                status(state.salesforce.isConnected, state.salesforce.instanceURL) {
+                status(state.salesforceConnected, state.salesforce.instanceURL) {
                     state.connectSalesforce()
-                } disconnect: { state.salesforce.disconnect(); refresh += 1 }
+                } disconnect: { state.disconnectSalesforce() }
             }
             Section("Google (Gmail · Drive · Docs · Calendar · Chat)") {
-                TextField("OAuth client ID (Desktop app)", text: $state.settings.google.clientId)
+                MaskedField(title: "OAuth client ID (Desktop app)", text: $state.settings.google.clientId)
                 SecretField(title: "OAuth client secret", key: Keychain.Key.googleSecret)
                 Text("Sign in with the Fulbright mailbox account. Scopes: Gmail modify, Drive, Docs, Calendar events, Chat messages and spaces (read), directory (sender names in the chat).").font(.caption).foregroundStyle(.secondary)
-                status(state.google.isConnected, "") { state.connectGoogle() } disconnect: { state.google.disconnect(); refresh += 1 }
+                status(state.googleConnected, "") { state.connectGoogle() } disconnect: { state.disconnectGoogle() }
             }
             Section("Team chat (Google Chat)") {
                 ChatSpaceSettings()
@@ -91,7 +106,7 @@ struct SchemaStatus: View {
                 .font(.caption).foregroundStyle(state.storageMissingFields.isEmpty ? .green : Theme.warnOnDark)
             Spacer()
             Button("Check again") { state.run("Checking Salesforce fields…") { try await state.salesforceStartup() } }
-                .disabled(!state.salesforce.isConnected)
+                .disabled(!state.salesforceConnected)
         }
     }
 }

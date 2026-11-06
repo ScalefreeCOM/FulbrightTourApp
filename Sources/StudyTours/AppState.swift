@@ -71,6 +71,10 @@ final class AppState {
     var storageMissingFields: [String] = []
     var isSalesforceAdmin = false
     private var pullTask: Task<Void, Never>?
+    /// Observable mirror of the login state. The clients read the Keychain, which SwiftUI cannot observe,
+    /// so views use these and they are refreshed after every connect/disconnect.
+    private(set) var salesforceConnected = false
+    private(set) var googleConnected = false
 
     // host visits (Opportunities) and attendee-list drafts
     var hostVisits: [HostVisit] = []
@@ -112,6 +116,7 @@ final class AppState {
         google = GoogleClient(settings: d.settings.google)
         gemini = GeminiClient(settings: d.settings.gemini)
         if data.tours.isEmpty { newLocalTour() }
+        refreshConnectionState()
         startPolling()
         startPulling()
         startChatPolling()
@@ -131,7 +136,7 @@ final class AppState {
     /// Display title: always the Salesforce program name (contains city and year).
     var tourTitle: String { tour.campaignId.isEmpty ? "No program selected" : tour.name }
 
-    var isCentral: Bool { !tour.campaignId.isEmpty && salesforce.isConnected && storageMissingFields.isEmpty == true }
+    var isCentral: Bool { !tour.campaignId.isEmpty && salesforceConnected && storageMissingFields.isEmpty == true }
 
     var settings: AppSettings {
         get { data.settings }
@@ -189,6 +194,7 @@ final class AppState {
     func connectSalesforce() {
         run("Connecting to Salesforce…") {
             try await self.salesforce.connect(openURL: Self.open)
+            self.refreshConnectionState()
             self.flash("Salesforce connected")
             try await self.salesforceStartup()
         }
@@ -203,7 +209,21 @@ final class AppState {
         users = (try? await salesforce.activeUsers()) ?? []
         if !tour.campaignId.isEmpty { await refreshProgram() }
     }
-    func connectGoogle() { run("Connecting to Google…") { try await self.google.connect(openURL: Self.open); self.flash("Google connected") } }
+    func connectGoogle() {
+        run("Connecting to Google…") {
+            try await self.google.connect(openURL: Self.open)
+            self.refreshConnectionState()
+            self.flash("Google connected")
+        }
+    }
+
+    func disconnectSalesforce() { salesforce.disconnect(); refreshConnectionState() }
+    func disconnectGoogle() { google.disconnect(); refreshConnectionState() }
+
+    func refreshConnectionState() {
+        salesforceConnected = salesforce.isConnected
+        googleConnected = google.isConnected
+    }
 
     // MARK: Setup
 
@@ -318,7 +338,7 @@ final class AppState {
     // MARK: Checklist (Salesforce Tasks)
 
     var checklistInSalesforce: Bool {
-        !tour.campaignId.isEmpty && salesforce.isConnected && !storageMissingFields.contains("Task.\(SFMap["task.phase"])")
+        !tour.campaignId.isEmpty && salesforceConnected && !storageMissingFields.contains("Task.\(SFMap["task.phase"])")
     }
 
     /// Default plan → Tasks on the program, due dates from the tour dates, owned by the current user.
@@ -1029,7 +1049,7 @@ final class AppState {
     // MARK: Team chat (Google Chat space, as the signed-in Google user)
 
     var chatSpace: String { settings.google.effectiveChatSpace }
-    var chatReady: Bool { google.isConnected && !chatSpace.isEmpty }
+    var chatReady: Bool { googleConnected && !chatSpace.isEmpty }
 
     /// Puts text into the chat composer for review — nothing is posted until the user presses Send.
     func shareToTeam(_ text: String) {
