@@ -506,6 +506,37 @@ final class AppState {
         flash("Tour folder and agenda created in the shared Drive")
     }
 
+    /// Builds the agenda presentation: a fresh copy of the Slides template, filled with the public agenda entries
+    /// (time, address, speakers). The previous agenda is kept, renamed "… – previous version"; the program links to the new one.
+    func generateAgendaSlides() {
+        run("Creating the agenda presentation…") {
+            guard !self.tour.campaignId.isEmpty else { throw AppError("Select the tour's program first.") }
+            guard !self.tour.driveFolderId.isEmpty else { throw AppError("Create the tour folder in Drive first (Setup phase).") }
+            let entries = AgendaSlides.entries(self.tour.agenda)
+            guard !entries.isEmpty else { throw AppError("The agenda has no public entries yet — add the confirmed visits first (Host Outreach).") }
+            // check the template before copying anything
+            guard AgendaSlides.entrySlideId(in: try await self.google.presentation(DriveStructure.agendaTemplateId)) != nil else {
+                throw AppError("The agenda template has no entry slide. Add a slide containing \(AgendaSlides.entryMarker) — see the README for all placeholders.")
+            }
+            let name = DriveStructure.agendaName(program: self.tour.name)
+            let previous = self.tour.agendaDocId
+            let copy = try await self.google.copyFile(DriveStructure.agendaTemplateId, name: name, parent: self.tour.driveFolderId)
+            guard let slide = AgendaSlides.entrySlideId(in: try await self.google.presentation(copy)) else {
+                throw AppError("Could not find the entry slide in the copied agenda.")
+            }
+            try await self.google.updatePresentation(copy, requests: AgendaSlides.requests(entrySlideId: slide, entries: entries,
+                                                                                         globals: AgendaSlides.globals(self.tour)))
+            if !previous.isEmpty, previous != copy {
+                try? await self.google.renameFile(previous, to: "\(name) – previous version \(Date().formatted(date: .numeric, time: .shortened))")
+            }
+            try await self.salesforce.setProgramLinks(programId: self.tour.campaignId, folder: DriveStructure.folderURL(self.tour.driveFolderId),
+                                                      agenda: DriveStructure.slidesURL(copy))
+            self.tour.agendaDocId = copy
+            if let u = URL(string: DriveStructure.slidesURL(copy)) { NSWorkspace.shared.open(u) }
+            self.flash("Agenda created with \(entries.count) entries")
+        }
+    }
+
     // MARK: Participants & cleansing
 
     func loadParticipants() {

@@ -23,6 +23,9 @@ struct AgendaView: View {
                         TextField("Google Calendar ID", text: Binding(get: { state.tour.googleCalendarId }, set: { state.tour.googleCalendarId = $0 }))
                             .frame(width: 220).help("“primary” or the ID of a shared tour calendar")
                         if !tour.agendaDocId.isEmpty, let u = GoogleClient.fileURL(tour.agendaDocId) { Link("Agenda doc", destination: u) }
+                        Button { state.generateAgendaSlides() } label: { Label("Create agenda", systemImage: "rectangle.on.rectangle.angled") }
+                            .disabled(!state.googleConnected || tour.driveFolderId.isEmpty)
+                            .help("Fills a fresh copy of the Slides template with the public entries (time, address, speakers); the previous agenda is kept as “previous version”")
                         Button { state.syncAgenda() } label: { Label("Sync now (\(tour.agenda.filter(\.needsSync).count) pending)", systemImage: "arrow.triangle.2.circlepath") }
                             .buttonStyle(.borderedProminent).tint(Theme.fbBlue)
                             .disabled(!state.salesforceConnected && !state.googleConnected)

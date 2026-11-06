@@ -676,3 +676,55 @@ final class TeamChatTests: XCTestCase {
         XCTAssertEqual(g.inboxQuery, GoogleSettings().inboxQuery)
     }
 }
+
+final class AgendaSlidesTests: XCTestCase {
+    let utc = TimeZone(identifier: "UTC")!
+
+    func item(_ title: String, _ start: String, _ end: String, location: String = "", details: String = "", isPublic: Bool = true) -> AgendaItem {
+        let f = ISO8601DateFormatter()
+        var i = AgendaItem(title: title, kind: .visit, start: f.date(from: start)!, end: f.date(from: end)!)
+        i.location = location; i.details = details; i.publicItem = isPublic
+        return i
+    }
+
+    func testEntriesInDateOrderWithSpeakers() {
+        let e = AgendaSlides.entries([
+            item("Example Ministry", "2026-09-29T10:00:00Z", "2026-09-29T11:30:00Z", location: "Rue de la Loi 1, Brussels",
+                 details: "Speakers: Jane Doe, Director; John Roe"),
+            item("Team dinner", "2026-09-28T19:00:00Z", "2026-09-28T21:00:00Z", isPublic: false),
+            item("Welcome", "2026-09-28T09:00:00Z", "2026-09-28T10:00:00Z"),
+        ], timeZone: utc)
+        XCTAssertEqual(e.map(\.title), ["Welcome", "Example Ministry"])          // internal entries left out
+        XCTAssertEqual(e[1].date, "Tuesday, 29 September 2026")
+        XCTAssertEqual(e[1].time, "10:00 – 11:30")
+        XCTAssertEqual(e[1].address, "Rue de la Loi 1, Brussels")
+        XCTAssertEqual(e[1].speakers, "Jane Doe, Director\nJohn Roe")
+        XCTAssertEqual(e[1].details, "")
+    }
+
+    func testRequestsDuplicateFillAndRemoveTemplate() {
+        let e = [AgendaSlides.Entry(title: "A", date: "d1", time: "t1", address: "x", speakers: "", details: ""),
+                 AgendaSlides.Entry(title: "B", date: "d2", time: "t2", address: "y", speakers: "", details: "")]
+        let r = AgendaSlides.requests(entrySlideId: "tpl", entries: e, globals: ["{{tour}}": "Brussels 2026"])
+        // duplicated in reverse so that A comes first after the template slide
+        let dups = r.compactMap { ($0["duplicateObject"] as? [String: Any])?["objectIds"] as? [String: String] }
+        XCTAssertEqual(dups, [["tpl": "agenda_entry_1"], ["tpl": "agenda_entry_0"]])
+        let fills = r.compactMap { $0["replaceAllText"] as? [String: Any] }
+        XCTAssertTrue(fills.contains { ($0["replaceText"] as? String) == "A" && ($0["pageObjectIds"] as? [String]) == ["agenda_entry_0"] })
+        XCTAssertTrue(fills.contains { ($0["replaceText"] as? String) == "Brussels 2026" && $0["pageObjectIds"] == nil })
+        XCTAssertEqual((r.first { $0["deleteObject"] != nil }?["deleteObject"] as? [String: String])?["objectId"], "tpl")
+    }
+
+    func testEntrySlideAndDates() {
+        let pres: [String: Any] = ["slides": [["objectId": "cover", "pageElements": [["shape": ["text": "{{tour}}"]]]],
+                                              ["objectId": "entry", "pageElements": [["shape": ["text": "{{title}} at {{time}}"]]]]]]
+        XCTAssertEqual(AgendaSlides.entrySlideId(in: pres), "entry")
+        XCTAssertNil(AgendaSlides.entrySlideId(in: ["slides": [["objectId": "x"]]]))
+        let f = ISO8601DateFormatter()
+        var t = Tour(name: "Brussels 2026", startDate: f.date(from: "2026-09-28T08:00:00Z")!, endDate: f.date(from: "2026-10-02T08:00:00Z")!)
+        t.city = "Brussels"
+        XCTAssertEqual(AgendaSlides.globals(t, timeZone: utc)["{{dates}}"], "28 September – 2 October 2026")
+        t.endDate = f.date(from: "2026-09-30T08:00:00Z")!
+        XCTAssertEqual(AgendaSlides.globals(t, timeZone: utc)["{{dates}}"], "28 – 30 September 2026")
+    }
+}

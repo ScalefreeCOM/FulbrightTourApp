@@ -214,6 +214,21 @@ visits, not an assistant); VIPs are marked with a crown wherever their mail appe
 with a member or contact is logged as an activity on their record, and corrections from the data-quality check
 (names, phone numbers, dates, countries) are written back after review.
 
+**Agenda presentation.** *Create agenda* on the Agenda screen fills a fresh copy of the Google Slides template with
+the public agenda entries — for attendees and for promotion. Confirmed host visits come onto the agenda with their
+time, address and speakers (*Host Outreach → Add confirmed visits to agenda*). The previous agenda stays in the tour
+folder as "previous version", and the program links to the new one. Edit the design in the template, not in the
+generated copy. Placeholders in the template:
+
+| Placeholder | Where | Replaced with |
+|---|---|---|
+| `{{tour}}`, `{{city}}`, `{{dates}}`, `{{year}}` | any slide | Program name, city, "28 September – 2 October 2026", year |
+| `{{title}}` | the **entry slide** | Marks the slide that is repeated once per agenda entry, in date order; replaced with the host organization or event |
+| `{{date}}`, `{{time}}` | entry slide | "Tuesday, 29 September 2026", "10:00 – 11:30" |
+| `{{address}}` | entry slide | Visit Location, otherwise the host organization's address |
+| `{{speakers}}` | entry slide | VIP contacts linked to the visit, one per line ("Name, Title") |
+| `{{details}}` | entry slide | Other notes of the agenda entry |
+
 **Team chat.** Below *At a Glance*, the app shows the organizing team's **Google Chat** space: read the latest
 messages and write to the team without leaving the app. Status digests (overdue and upcoming tasks), the agenda and
 today's plan can be inserted into the message box with one click — you review the text before it is sent. Messages

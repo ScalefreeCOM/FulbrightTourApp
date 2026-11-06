@@ -256,6 +256,24 @@ public final class GoogleClient: @unchecked Sendable {
         return r["id"] as? String ?? ""
     }
 
+    /// Renames a Drive file.
+    public func renameFile(_ id: String, to name: String) async throws {
+        try await call("PATCH", "https://www.googleapis.com/drive/v3/files/\(id)?supportsAllDrives=true", json: ["name": name])
+    }
+
+    /// A Google Slides presentation (structure and text), via the Slides API.
+    public func presentation(_ id: String) async throws -> [String: Any] {
+        do {
+            return try await call("GET", "https://slides.googleapis.com/v1/presentations/\(id)") as? [String: Any] ?? [:]
+        } catch let e as APIError where e.status == 403 && (e.body.contains("SERVICE_DISABLED") || e.body.contains("has not been used")) {
+            throw AppError("The Google Slides API is not enabled in the Google Cloud project — enable it under APIs & Services → Library.")
+        }
+    }
+
+    public func updatePresentation(_ id: String, requests: [[String: Any]]) async throws {
+        try await call("POST", "https://slides.googleapis.com/v1/presentations/\(id):batchUpdate", json: ["requests": requests])
+    }
+
     /// Replaces the content of an existing file (for Google Docs, the HTML is converted again).
     public func replaceContent(fileId: String, data: Data, mimeType: String) async throws {
         try await call("PATCH", "https://www.googleapis.com/upload/drive/v3/files/\(fileId)?uploadType=media",
