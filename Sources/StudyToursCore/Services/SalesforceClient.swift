@@ -52,6 +52,7 @@ enum F {
     static var visitStart: String { SFMap["hostVisit.visitStart"] }
     static var visitEnd: String { SFMap["hostVisit.visitEnd"] }
     static var deadline: String { SFMap["hostVisit.listDeadline"] }
+    static var visitLocation: String { SFMap["hostVisit.location"] }
     static var recipient: String { SFMap["hostVisit.recipient"] }
     static var recipientRel: String { SFMap["hostVisit.recipientRelationship"] }
     static var greeting: String { SFMap["contact.greeting"] }
@@ -503,22 +504,78 @@ public final class SalesforceClient: @unchecked Sendable {
         let iso = ISO8601DateFormatter(); iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let isoPlain = ISO8601DateFormatter()
         func dt(_ v: Any?) -> Date? { (v as? String).flatMap { iso.date(from: $0) ?? isoPlain.date(from: $0) } }
+        let hasLocation = try await fieldNames(of: "Opportunity").contains(F.visitLocation)
         let rows = try await query("""
             SELECT Id, Name, StageName, AccountId, Account.Name, \(F.visitStart), \(F.visitEnd), \(F.deadline), \
             \(F.recipient), \(F.recipientRel).Name, \(F.recipientRel).Email, \
-            \(F.recipientRel).\(F.greeting) FROM Opportunity WHERE CampaignId = '\(Self.esc(programId))' \
+            \(F.recipientRel).\(F.greeting), Account.BillingStreet, Account.BillingPostalCode, Account.BillingCity, \
+            Account.BillingCountry\(hasLocation ? ", \(F.visitLocation)" : "") \
+            FROM Opportunity WHERE CampaignId = '\(Self.esc(programId))' \
             ORDER BY \(F.visitStart) NULLS LAST, Name
             """)
+        let ids = rows.compactMap { $0["Id"] as? String }
+        let speakers = try await vipSpeakers(opportunityIds: ids)
+        let documents = try await attachedDocuments(on: ids)
         return rows.map { r in
             let rec = r[F.recipientRel] as? [String: Any]
-            return HostVisit(id: r["Id"] as? String ?? "", name: r["Name"] as? String ?? "", stage: r["StageName"] as? String ?? "",
+            let acc = r["Account"] as? [String: Any]
+            let own = (r[F.visitLocation] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let id = r["Id"] as? String ?? ""
+            var v = HostVisit(id: id, name: r["Name"] as? String ?? "", stage: r["StageName"] as? String ?? "",
                              accountId: r["AccountId"] as? String, organization: (r["Account"] as? [String: Any])?["Name"] as? String ?? "",
                              visitStart: dt(r[F.visitStart]), visitEnd: dt(r[F.visitEnd]),
                              listDeadline: (r[F.deadline] as? String).flatMap(Self.dayFormatter.date(from:)),
                              recipientId: r[F.recipient] as? String,
                              recipientName: rec?["Name"] as? String ?? "", recipientEmail: rec?["Email"] as? String ?? "",
                              recipientGreeting: rec?[F.greeting] as? String ?? "")
+            v.location = own.isEmpty ? Self.address(acc) : own
+            v.speakers = speakers[id] ?? []
+            v.documents = documents[id] ?? []
+            return v
         }
+    }
+
+    /// "Street, Postal code City, Country" from an Account's billing address.
+    static func address(_ acc: [String: Any]?) -> String {
+        func v(_ k: String) -> String { (acc?[k] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines) }
+        let city = [v("BillingPostalCode"), v("BillingCity")].filter { !$0.isEmpty }.joined(separator: " ")
+        return [v("BillingStreet").replacingOccurrences(of: "\n", with: ", "), city, v("BillingCountry")]
+            .filter { !$0.isEmpty }.joined(separator: ", ")
+    }
+
+    /// VIP contacts linked to the visits as contact roles — the speakers ("Name, Title"), per Opportunity.
+    func vipSpeakers(opportunityIds ids: [String]) async throws -> [String: [String]] {
+        guard !ids.isEmpty, try await hasContactVIP() else { return [:] }
+        let list = ids.map { "'\(Self.esc($0))'" }.joined(separator: ",")
+        var out: [String: [String]] = [:]
+        for r in try await query("SELECT OpportunityId, Contact.Name, Contact.Title FROM OpportunityContactRole WHERE OpportunityId IN (\(list)) AND Contact.\(F.vip) = true ORDER BY IsPrimary DESC, Contact.LastName") {
+            guard let oid = r["OpportunityId"] as? String, let c = r["Contact"] as? [String: Any], let name = c["Name"] as? String else { continue }
+            let title = (c["Title"] as? String ?? "").trimmingCharacters(in: .whitespaces)
+            out[oid, default: []].append(title.isEmpty ? name : "\(name), \(title)")
+        }
+        return out
+    }
+
+    /// Files attached to the visits except the attendee-list spreadsheets — e.g. the host's own agenda.
+    func attachedDocuments(on ids: [String]) async throws -> [String: [SalesforceFile]] {
+        guard !ids.isEmpty else { return [:] }
+        let iso = ISO8601DateFormatter(); iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let list = ids.map { "'\(Self.esc($0))'" }.joined(separator: ",")
+        var out: [String: [SalesforceFile]] = [:]
+        for r in try await query("""
+            SELECT LinkedEntityId, ContentDocumentId, ContentDocument.LatestPublishedVersionId, ContentDocument.Title, \
+            ContentDocument.FileExtension, ContentDocument.ContentModifiedDate FROM ContentDocumentLink WHERE LinkedEntityId IN (\(list))
+            """) {
+            guard let oid = r["LinkedEntityId"] as? String, let d = r["ContentDocument"] as? [String: Any],
+                  let vid = d["LatestPublishedVersionId"] as? String else { continue }
+            let ext = (d["FileExtension"] as? String ?? "").lowercased()
+            if ["xlsx", "xlsm"].contains(ext) { continue }   // attendee-list forms are handled separately
+            var f = SalesforceFile(id: vid, title: d["Title"] as? String ?? "Attachment", fileExtension: ext,
+                                   modified: (d["ContentModifiedDate"] as? String).flatMap(iso.date(from:)))
+            f.documentId = r["ContentDocumentId"] as? String ?? ""
+            out[oid, default: []].append(f)
+        }
+        return out
     }
 
     /// Excel files attached to a record (newest first) — the host's attendee-list template.

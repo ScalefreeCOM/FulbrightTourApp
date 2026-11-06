@@ -276,6 +276,21 @@ final class AssistantTests: XCTestCase {
         XCTAssertEqual(Assistant.ensureSignOff("Thanks.", name: "Michael Olschimke", accept: ["Michael"]), "Thanks.\n\nBest regards,\nMichael Olschimke")
     }
 
+    func testVisitAgendaItemHasAddressAndSpeakers() {
+        var v = HostVisit(id: "006A", name: "Visit Example Ministry", stage: "Closed Won", accountId: "001A", organization: "Example Ministry",
+                          visitStart: Dates.parse("2026-09-29"), visitEnd: nil, listDeadline: nil, recipientId: nil,
+                          recipientName: "", recipientEmail: "", recipientGreeting: "")
+        v.location = "Rue de la Loi 1, 1000 Brussels, Belgium"
+        v.speakers = ["Jane Doe, Director", "John Roe"]
+        let i = v.agendaItem()!
+        XCTAssertEqual(i.title, "Example Ministry")
+        XCTAssertEqual(i.location, "Rue de la Loi 1, 1000 Brussels, Belgium")
+        XCTAssertEqual(i.details, "Speakers: Jane Doe, Director; John Roe")
+        XCTAssertEqual(i.end.timeIntervalSince(i.start), 5400)      // 90 minutes when no end time is set
+        v.visitStart = nil
+        XCTAssertNil(v.agendaItem())
+    }
+
     func testEmailHeaderParsing() {
         XCTAssertEqual(EmailRules.address(from: "\"Jane Doe\" <Jane@Example.com>"), "jane@example.com")
         XCTAssertEqual(EmailRules.displayName(from: "\"Jane Doe\" <jane@example.com>"), "Jane Doe")

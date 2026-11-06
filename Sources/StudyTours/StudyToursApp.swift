@@ -398,10 +398,11 @@ struct ConnectionDot: View {
     var reconnect: (() -> Void)? = nil
     var body: some View {
         Button { if on, problem != nil, let reconnect { reconnect() } else { state.selection = .settings } } label: {
-            HStack(spacing: 5) {
-                Circle().fill(!on ? Color.gray : problem != nil ? Color.orange : Color.green).frame(width: 7, height: 7)
-                Text(name).font(.caption)
+            HStack(spacing: 4) {
+                Circle().fill(!on ? Color.gray : problem != nil ? Color.orange : Color.green).frame(width: 6, height: 6)
+                Text(name).font(.system(size: 9.5, weight: .medium))
             }
+            .frame(height: 12)
             .foregroundStyle(.white.opacity(on ? 0.9 : 0.6))
         }
         .buttonStyle(.plain)
@@ -417,8 +418,8 @@ struct PartnerFooter: View {
     @Environment(AppState.self) private var state
     var body: some View {
         HStack(spacing: 14) {
-            // connection status
-            HStack(spacing: 10) {
+            // connection status — stacked, compact
+            VStack(alignment: .leading, spacing: 0) {
                 ConnectionDot(name: "Salesforce", on: state.salesforceConnected,
                               problem: state.salesforceProblem, reconnect: { state.reconnectSalesforce() })
                 ConnectionDot(name: "Google", on: state.googleConnected,

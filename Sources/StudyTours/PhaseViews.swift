@@ -209,6 +209,9 @@ struct HostsTools: View {
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 Button("Reload") { state.loadHostVisits() }.disabled(!state.salesforceConnected || state.tour.campaignId.isEmpty)
+                Button("Add confirmed visits to agenda") { state.addVisitsToAgenda() }
+                    .disabled(!state.hostVisits.contains { $0.isConfirmed })
+                    .help("Creates or updates the agenda entries with time, address and speakers")
             }
             if state.hostVisits.isEmpty {
                 Text(state.tour.campaignId.isEmpty ? "Select the program first." : "No host visits linked to this program yet — create them in the database (with this program selected on the visit).")
@@ -220,6 +223,17 @@ struct HostsTools: View {
                         Text(v.organization.isEmpty ? v.name : v.organization).bold()
                         Text(v.visitStart.map { $0.formatted(date: .abbreviated, time: .shortened) + (v.visitEnd.map { " – " + $0.formatted(date: .omitted, time: .shortened) } ?? "") } ?? "Visit time not set")
                             .font(.caption).foregroundStyle(.secondary)
+                        Label(v.location.isEmpty ? "No address — set Visit Location or the organization's address" : v.location, systemImage: "mappin.and.ellipse")
+                            .font(.caption).foregroundStyle(v.location.isEmpty ? Theme.warnOnDark : .secondary)
+                        Label(v.speakers.isEmpty ? "No speakers — link the VIP contacts to the visit as contact roles" : v.speakers.joined(separator: " · "),
+                              systemImage: "person.wave.2")
+                            .font(.caption).foregroundStyle(v.speakers.isEmpty ? Theme.warnOnDark : .secondary)
+                        ForEach(v.documents) { f in
+                            if let u = state.salesforce.recordURL(f.documentId) {
+                                Link(destination: u) { Label("\(f.title).\(f.fileExtension)", systemImage: "doc") }.font(.caption)
+                                    .help("Open the attached document")
+                            }
+                        }
                     }
                     Spacer()
                     Text(v.statusLabel).font(.caption.bold()).padding(.horizontal, 8).padding(.vertical, 2)

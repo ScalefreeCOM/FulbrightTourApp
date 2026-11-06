@@ -209,6 +209,12 @@ public struct HostVisit: Identifiable, Hashable, Sendable {
     public var recipientName: String
     public var recipientEmail: String
     public var recipientGreeting: String
+    /// Meeting address: Visit Location if set, otherwise the organization's address.
+    public var location: String = ""
+    /// Speakers: VIP contacts among the visit's contact roles ("Name, Title").
+    public var speakers: [String] = []
+    /// Files attached to the visit other than the attendee-list form (e.g. the host's own agenda).
+    public var documents: [SalesforceFile] = []
 
     public init(id: String, name: String, stage: String, accountId: String?, organization: String,
                 visitStart: Date?, visitEnd: Date?, listDeadline: Date?, recipientId: String?,
@@ -219,6 +225,16 @@ public struct HostVisit: Identifiable, Hashable, Sendable {
     }
 
     public var isConfirmed: Bool { stage == SFMap["hostVisit.stageConfirmed"] }
+
+    /// Agenda entry for this visit: time, address and speakers (for the calendar and the agenda).
+    public func agendaItem() -> AgendaItem? {
+        guard let start = visitStart else { return nil }
+        var i = AgendaItem(title: organization.isEmpty ? name : organization, kind: .visit,
+                           start: start, end: visitEnd ?? start.addingTimeInterval(5400))
+        i.location = location
+        i.details = speakers.isEmpty ? "" : "Speakers: " + speakers.joined(separator: "; ")
+        return i
+    }
     public var isDeclined: Bool { stage == SFMap["hostVisit.stageDeclined"] }
 
     /// Host status in study-tour terms (Opportunity stages from the mapping).
@@ -234,6 +250,8 @@ public struct HostVisit: Identifiable, Hashable, Sendable {
 
 public struct SalesforceFile: Identifiable, Hashable, Sendable {
     public var id: String                 // ContentVersion Id (latest)
+    /// ContentDocument Id (for the "open in Salesforce" link).
+    public var documentId: String = ""
     public var title: String
     public var fileExtension: String
     public var modified: Date?

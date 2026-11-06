@@ -18,9 +18,10 @@ Deploy: validate first (check-only), then deploy, then assign the permission set
 | Opportunity | `Attendee_List_Recipient__c` | Attendee List Recipient | Lookup | → Contact, on delete: SetNull | Contact who receives the filled attendee form. |
 | Opportunity | `List_Deadline__c` | List Deadline | Date |  | Date the host needs the attendee list; shown and highlighted in the app. |
 | Opportunity | `Visit_End__c` | Visit End | DateTime |  | End of the meeting with the host. |
+| Opportunity | `Visit_Location__c` | Visit Location | TextArea |  | Meeting address if it differs from the host organization's address; shown on the agenda. |
 | Opportunity | `Visit_Start__c` | Visit Start | DateTime |  | Start of the meeting with the host; drives the agenda. |
 
-**12 fields.**
+**13 fields.**
 
 ## Permission set `Fulbright_Study_Tours` (“Fulbright Study Tours”)
 
@@ -39,6 +40,7 @@ Access to the study tour fields used by the Fulbright Study Tours app. Assign to
 | `Opportunity.Attendee_List_Recipient__c` | ✓ | ✓ |
 | `Opportunity.List_Deadline__c` | ✓ | ✓ |
 | `Opportunity.Visit_End__c` | ✓ | ✓ |
+| `Opportunity.Visit_Location__c` | ✓ | ✓ |
 | `Opportunity.Visit_Start__c` | ✓ | ✓ |
 
 No object permissions, user permissions or app/tab settings are included — only field-level access to the new fields.

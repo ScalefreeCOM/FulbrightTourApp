@@ -39,6 +39,7 @@ public enum SFMap {
         ],
         "hostVisit": [         // object: Opportunity (one per host organisation and tour)
             "visitStart": "Visit_Start__c", "visitEnd": "Visit_End__c", "listDeadline": "List_Deadline__c",
+            "location": "Visit_Location__c",   // meeting address if it differs from the organization's address
             "recipient": "Attendee_List_Recipient__c", "recipientRelationship": "Attendee_List_Recipient__r",
             "stageIdentified": "Qualification", "stageLetterSent": "Needs Analysis",
             "stagesInDiscussion": ["Proposal", "Negotiation"],

@@ -40,6 +40,7 @@ struct AgendaView: View {
                                 VStack(alignment: .leading) {
                                     Text(item.title).bold()
                                     if !item.location.isEmpty { Text(item.location).font(.caption).foregroundStyle(.secondary) }
+                                    if !item.details.isEmpty { Text(item.details).font(.caption).foregroundStyle(.secondary).lineLimit(2) }
                                 }
                                 Spacer()
                                 if !item.publicItem { Text("internal").font(.caption2).padding(3).background(.quaternary, in: Capsule()) }
@@ -76,7 +77,7 @@ struct AgendaView: View {
 
     private func agendaText() -> String {
         "*\(state.tour.name) – agenda*\n" + state.tour.agenda.filter(\.publicItem).map {
-            "• \($0.start.formatted(.dateTime.weekday(.abbreviated).day().month().hour().minute())) \($0.title)\($0.location.isEmpty ? "" : " – \($0.location)")"
+            "• \($0.start.formatted(.dateTime.weekday(.abbreviated).day().month().hour().minute())) \($0.title)\($0.location.isEmpty ? "" : " – \($0.location)")\($0.details.isEmpty ? "" : " (\($0.details))")"
         }.joined(separator: "\n")
     }
 }

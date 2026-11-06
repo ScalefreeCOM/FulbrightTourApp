@@ -16,6 +16,7 @@
       "Proposal",
       "Negotiation"
     ],
+    "location" : "Visit_Location__c",
     "visitEnd" : "Visit_End__c",
     "visitStart" : "Visit_Start__c"
   },

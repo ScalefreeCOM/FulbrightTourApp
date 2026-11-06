@@ -19,6 +19,11 @@
         <editable>true</editable>
     </fieldPermissions>
     <fieldPermissions>
+        <field>Opportunity.Visit_Location__c</field>
+        <readable>true</readable>
+        <editable>true</editable>
+    </fieldPermissions>
+    <fieldPermissions>
         <field>Opportunity.Visit_Start__c</field>
         <readable>true</readable>
         <editable>true</editable>

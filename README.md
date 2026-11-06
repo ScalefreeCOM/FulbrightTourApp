@@ -182,7 +182,7 @@ folders, knowledge base, chat space) is shared with each person in Google — se
 | # | Phase | What the app does |
 |---|---|---|
 | 0 | Setup | Creates the program (Campaign) in Salesforce, the tour folder in the shared Google Drive and a copy of the agenda template; creates the checklist as Salesforce Tasks |
-| 1 | Host outreach | Shows the host visits (Opportunities on the program) with their stage, visit time and contact |
+| 1 | Host outreach | Shows the host visits (Opportunities on the program) with their stage, visit time, meeting address (Visit Location or the organization's address), speakers (VIP contacts linked as contact roles) and attached documents such as the host's own agenda; confirmed visits are put on the agenda with time, address and speakers |
 | 2 | Program & promotion | Links to the agenda and the shared knowledge base used by the email assistant |
 | 3 | Registration & data quality | Loads the attending members, cleans names, emails, dates and countries, converts phone numbers to international format (ITU-T E.164), checks ID documents (all details present, valid until one week after the last day of the program), finds duplicates — corrections are written back after review. Members with incomplete or invalid ID details can be asked by email to update them via a form; all attendees can be reminded to bring the document on record. These emails contain no document data and are logged on the member |
 | 4 | Host submissions & logistics | Fills each host's **own Excel registration form** (attached to the Opportunity) with the attending members, respecting the form's dropdowns, country codes and date formats; review, then send via Gmail to the host's contact |

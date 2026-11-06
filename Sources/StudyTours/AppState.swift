@@ -677,6 +677,30 @@ final class AppState {
 
     // MARK: Agenda / calendar
 
+    /// Puts the confirmed host visits on the agenda with time, address and speakers. An entry for the same
+    /// organization on the same day is updated (keeps its calendar links), otherwise a new one is added.
+    func addVisitsToAgenda() {
+        var t = tour
+        var added = 0, updated = 0
+        for v in hostVisits where v.isConfirmed {
+            guard let item = v.agendaItem() else { continue }
+            if let i = t.agenda.firstIndex(where: { $0.kind == .visit && $0.title == item.title
+                                                   && Calendar.current.isDate($0.start, inSameDayAs: item.start) }) {
+                let old = t.agenda[i]
+                t.agenda[i].start = item.start; t.agenda[i].end = item.end
+                t.agenda[i].location = item.location; t.agenda[i].details = item.details
+                if t.agenda[i] != old { t.agenda[i].modified = Date(); updated += 1 }
+            } else {
+                t.agenda.append(item); added += 1
+            }
+        }
+        t.agenda.sort { $0.start < $1.start }
+        tour = t
+        let noTime = hostVisits.filter { $0.isConfirmed && $0.visitStart == nil }.count
+        flash("Agenda: \(added) added, \(updated) updated" + (noTime > 0 ? " · \(noTime) confirmed visits have no time yet" : "")
+              + " — use Sync on the Agenda screen to update the calendars")
+    }
+
     func touchAgenda(_ item: AgendaItem) {
         var i = item
         i.modified = Date()

@@ -68,6 +68,10 @@ The app always writes the English **API values** of the country picklists (e.g. 
 | `CampaignId` | Lookup (Campaign) | Standard | Links the visit to the tour's program | — |
 | `StageName` | Picklist | Standard | Host status — see values below | `hostVisit.stage…` |
 | `Visit_Start__c`, `Visit_End__c` | Date/Time | Package | Meeting time; drives the agenda | `hostVisit.visitStart`, `hostVisit.visitEnd` |
+| `Visit_Location__c` | Text Area (255) | Package | Meeting address on the agenda, if it differs from the organization's billing address (used when empty) | `hostVisit.location` |
+| `Account.BillingStreet`, `BillingPostalCode`, `BillingCity`, `BillingCountry` | Standard | Standard | Default meeting address | — |
+| `OpportunityContactRole` (`OpportunityId`, `ContactId`) | Standard | Standard | Speakers on the agenda = VIP contacts (`Contact.VIP__c`) linked to the visit as contact roles | — |
+| Files (`ContentDocumentLink`) | Standard | Standard | Documents attached to the visit (e.g. the host's own agenda) are listed with the visit; Excel files are the attendee-list forms | — |
 | `List_Deadline__c` | Date | Package | Deadline for the attendee list | `hostVisit.listDeadline` |
 | `Attendee_List_Recipient__c` | Lookup (Contact) | Package | Receives the filled attendee form | `hostVisit.recipient`, `hostVisit.recipientRelationship` |
 | Attached Excel file | File (ContentDocumentLink) | Standard | The host's own registration form (`.xlsx`) | — |
