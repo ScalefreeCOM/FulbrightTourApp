@@ -21,6 +21,9 @@ public struct AppConfig: Codable, Equatable, Sendable {
     public var knowledgeBaseURL: String
     /// Default Google Chat space of the team ("spaces/…" or the space's URL). Optional; can be picked in Settings.
     public var googleChatSpace: String = ""
+    /// Last characters of the sponsored Gemini API key. When the saved key ends with them,
+    /// the footer says who pays for Gemini. Optional; kept in the config so no key fragment is in the code.
+    public var geminiSponsorKeySuffix: String = ""
 
     public static let empty = AppConfig(salesforceURL: "", salesforceConsumerKey: "", googleClientId: "",
                                         driveParentFolderId: "", agendaTemplateId: "", knowledgeBaseURL: "")
@@ -41,6 +44,14 @@ public struct AppConfig: Codable, Equatable, Sendable {
                   googleClientId: try s(.googleClientId), driveParentFolderId: try s(.driveParentFolderId),
                   agendaTemplateId: try s(.agendaTemplateId), knowledgeBaseURL: try s(.knowledgeBaseURL),
                   googleChatSpace: try s(.googleChatSpace))
+        geminiSponsorKeySuffix = try s(.geminiSponsorKeySuffix)
+    }
+
+    /// True if the saved Gemini key is the sponsored one (see `geminiSponsorKeySuffix`).
+    public static var geminiKeyIsSponsored: Bool {
+        let suffix = current.geminiSponsorKeySuffix.trimmingCharacters(in: .whitespaces)
+        guard !suffix.isEmpty, let key = Keychain.get(Keychain.Key.geminiKey) else { return false }
+        return key.hasSuffix(suffix)
     }
 
     public var isComplete: Bool { !salesforceURL.isEmpty && !driveParentFolderId.isEmpty && !agendaTemplateId.isEmpty }

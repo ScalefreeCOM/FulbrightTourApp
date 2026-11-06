@@ -250,6 +250,7 @@ cp config/studytours.config.example.json config/studytours.config.json
 | `agendaTemplateId` | Google Slides template copied into each tour folder |
 | `knowledgeBaseURL` | Default knowledge base (Google Doc) for the email assistant |
 | `googleChatSpace` | Optional: link to the team's Google Chat space (can also be picked in the app's Settings) |
+| `geminiSponsorKeySuffix` | Optional: last characters of a sponsored Gemini API key. With that key the footer says "Gemini AI is paid by" the maintainer; any other key shows "Custom Gemini AI key applied" |
 
 `config/studytours.config.json` is git-ignored. The build script bundles it into the app.
 
