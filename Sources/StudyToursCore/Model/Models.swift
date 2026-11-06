@@ -365,8 +365,6 @@ public struct SalesforceSettings: Codable, Hashable, Sendable {
         Dictionary(uniqueKeysWithValues: ParticipantField.allCases.map { ($0, $0.defaultSalesforceField) })
     /// Extra SOQL filter for Leads when no campaign is linked, e.g. `LeadSource = 'Study Tour 2026'`.
     public var leadFilter: String = ""
-    /// Only list top-level programs (child programs such as thank-you mailings are hidden).
-    public var topLevelProgramsOnly: Bool = true
 
     public init() {}
 

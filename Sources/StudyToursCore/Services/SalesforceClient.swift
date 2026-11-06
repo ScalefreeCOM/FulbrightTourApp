@@ -161,8 +161,10 @@ public final class SalesforceClient: @unchecked Sendable {
     // MARK: Campaigns & Leads
 
     public func campaigns() async throws -> [(id: String, name: String)] {
-        let filter = settings.topLevelProgramsOnly ? " AND ParentId = null" : ""
-        return try await query("SELECT Id, Name FROM Campaign WHERE IsActive = true\(filter) ORDER BY StartDate DESC NULLS LAST, CreatedDate DESC LIMIT 200")
+        // Study tours = programs of type "Study Tour" with a start date. This works whether tours are top-level
+        // or children of an umbrella program, and hides the umbrella and thank-you mailings (no start date).
+        // Past (inactive) tours stay listed, e.g. for the wrap-up and deleting passport data after the tour.
+        return try await query("SELECT Id, Name FROM Campaign WHERE \(F.programType) = '\(Self.esc(F.studyTourType))' AND StartDate != null ORDER BY StartDate DESC LIMIT 200")
             .map { ($0["Id"] as? String ?? "", $0["Name"] as? String ?? "") }
     }
 

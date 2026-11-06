@@ -20,10 +20,10 @@ the last column. Names in *italics* are labels used in the Fulbright org (e.g. C
 | Field | Type | Provided by | Used for | Mapping key |
 |---|---|---|---|---|
 | `Name` | Text (80) | Standard | Tour title (contains city and year) | — |
-| `StartDate`, `EndDate` | Date | Standard | Tour dates; all deadlines are calculated from them | — |
-| `IsActive` | Checkbox | Standard | Only active programs are listed | — |
-| `ParentId` | Lookup (Campaign) | Standard | Child programs, e.g. the thank-you mailing to officials | — |
-| `Type` | Picklist | Standard | Value **`Study Tour`** marks study-tour programs | `program.type`, `program.studyTourTypeValue` |
+| `StartDate`, `EndDate` | Date | Standard | Tour dates; all deadlines are calculated from them. Programs without a start date (umbrella program, thank-you mailings) are not listed as tours | — |
+| `IsActive` | Checkbox | Standard | Set on programs the app creates; inactive (past) tours are still listed | — |
+| `ParentId` | Lookup (Campaign) | Standard | Child programs, e.g. the thank-you mailing to officials. Tours may be top-level or children of an umbrella program | — |
+| `Type` | Picklist | Standard | Value **`Study Tour`** marks study-tour programs; the program picker lists these (with a start date), newest first | `program.type`, `program.studyTourTypeValue` |
 | `Study_Tour_City__c` | Text (80) | Package | City / region | `program.city` |
 | `Drive_Folder__c` | URL | Package | Tour folder in the shared Google Drive | `program.driveFolder` |
 | `Agenda_Document__c` | URL | Package | The tour's copy of the agenda template | `program.agendaDocument` |
