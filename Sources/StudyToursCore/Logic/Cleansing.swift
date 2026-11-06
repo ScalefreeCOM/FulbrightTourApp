@@ -36,9 +36,29 @@ public struct Cleanser: Sendable {
     public var tourEnd: Date
     /// Fields required by at least one host — missing values are reported.
     public var requiredFields: Set<ParticipantField>
+    /// "Now" for the expiry check (injectable for tests).
+    public var today: Date
 
-    public init(settings: CleansingSettings, tourEnd: Date, requiredFields: Set<ParticipantField>) {
-        self.settings = settings; self.tourEnd = tourEnd; self.requiredFields = requiredFields
+    public init(settings: CleansingSettings, tourEnd: Date, requiredFields: Set<ParticipantField>, today: Date = Date()) {
+        self.settings = settings; self.tourEnd = tourEnd; self.requiredFields = requiredFields; self.today = today
+    }
+
+    /// Identity documents must be valid until the last day of the program plus one week.
+    public var passportValidUntil: Date { Calendar.current.date(byAdding: .day, value: 7, to: tourEnd) ?? tourEnd }
+
+    /// Problems with a member's identity-document data. Values are only checked for being present —
+    /// no format judgement on numbers — plus whether dates can be read and the document is valid long enough.
+    public func passportProblems(_ p: Participant) -> [PassportProblem] {
+        var out: [PassportProblem] = []
+        for f in ParticipantField.allCases where f.isPassportData {
+            if p[f].isEmpty { out.append(.missing(f)) }
+            else if f.isDate && Dates.parse(p[f]) == nil { out.append(.unreadable(f)) }
+        }
+        if let exp = Dates.parse(p[.passportExpiry]) {
+            if exp < Calendar.current.startOfDay(for: today) { out.append(.expired(exp)) }
+            else if exp < passportValidUntil { out.append(.notValidLongEnough(exp)) }
+        }
+        return out
     }
 
     public func run(_ participants: [Participant]) -> CleansingReport {
@@ -84,7 +104,7 @@ public struct Cleanser: Sendable {
             guard let c = Countries.normalize(v) else { return (v, "Whitespace") }
             return (c, "Standard country name")
         case .passportNumber:
-            return (Passport.normalize(v), "Upper-case, no separators")
+            return nil   // taken as entered — no format changes or judgement
         case .identificationType:
             let l = v.lowercased()
             if l.contains("pass") || l.contains("reisepass") { return ("Passport", "Org picklist value") }
@@ -103,15 +123,12 @@ public struct Cleanser: Sendable {
             out.append(DataIssue(participantId: p.id, participantName: p.displayName, field: f, severity: s, message: m))
         }
 
-        for f in requiredFields.sorted(by: { $0.rawValue < $1.rawValue }) where p[f].isEmpty {
+        for f in requiredFields.sorted(by: { $0.rawValue < $1.rawValue }) where p[f].isEmpty && !f.isPassportData {
             add(f, .error, "\(f.label) is missing (required by a host)")
         }
         if !p[.email].isEmpty && !EmailRules.isValid(p[.email]) { add(.email, .error, "Email address looks invalid") }
         if !p[.phone].isEmpty && Phone.normalize(p[.phone], defaultCode: settings.defaultCountryCallingCode) == nil {
-            add(.phone, .warning, "Phone number could not be normalised")
-        }
-        for f in [ParticipantField.birthDate, .passportExpiry] where !p[f].isEmpty && Dates.parse(p[f]) == nil {
-            add(f, .error, "\(f.label) is not a valid date")
+            add(.phone, .warning, "Phone number could not be converted to international format")
         }
         if let b = Dates.parse(p[.birthDate]) {
             let age = Calendar.current.dateComponents([.year], from: b, to: tourEnd).year ?? 0
@@ -120,16 +137,14 @@ public struct Cleanser: Sendable {
         for f in [ParticipantField.nationality, .passportIssuingCountry] where !p[f].isEmpty && Countries.normalize(p[f]) == nil {
             add(f, .warning, "Unknown country \"\(p[f])\"")
         }
-        if !p[.passportNumber].isEmpty {
-            let n = Passport.normalize(p[.passportNumber])
-            if !Passport.isPlausible(n) { add(.passportNumber, .warning, "Passport/ID number has unusual format") }
-        }
-        if let exp = Dates.parse(p[.passportExpiry]) {
-            let minValid = Calendar.current.date(byAdding: .month, value: settings.passportMinValidityMonths, to: tourEnd) ?? tourEnd
-            if exp < tourEnd {
-                add(.passportExpiry, .error, "Passport expires before the end of the tour (\(Dates.iso(exp)))")
-            } else if exp < minValid {
-                add(.passportExpiry, .warning, "Passport valid less than \(settings.passportMinValidityMonths) months after the tour")
+        // identity document: every field present, dates readable, valid until one week after the tour
+        for problem in passportProblems(p) {
+            switch problem {
+            case .missing(let f): add(f, .error, "\(f.label) is missing")
+            case .unreadable(let f): add(f, .error, "\(f.label) is not a valid date")
+            case .expired(let d): add(.passportExpiry, .error, "Passport/ID expired on \(Dates.iso(d))")
+            case .notValidLongEnough(let d):
+                add(.passportExpiry, .error, "Passport/ID expires on \(Dates.iso(d)) — must be valid until at least \(Dates.iso(passportValidUntil)) (one week after the tour)")
             }
         }
         return out
@@ -322,6 +337,13 @@ public enum Countries {
         guard let code = lookup[Text.fold(s)] else { return nil }
         return orgValueByCode[code] ?? Locale(identifier: "en").localizedString(forRegionCode: code)
     }
+}
+
+public enum PassportProblem: Hashable, Sendable {
+    case missing(ParticipantField)
+    case unreadable(ParticipantField)
+    case expired(Date)
+    case notValidLongEnough(Date)
 }
 
 public enum Passport {

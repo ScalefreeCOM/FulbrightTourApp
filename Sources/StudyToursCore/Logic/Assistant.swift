@@ -289,6 +289,70 @@ public enum Assistant {
         return withFooter(reply, signature: signature) + "\n\nOn \(df.string(from: original.date)), \(original.fromName) wrote:\n\(quoted)"
     }
 
+    // MARK: Mails to members about their identity document (never contain document data)
+
+    /// Placeholder for the self-service form where members update their details.
+    public static let passportUpdateFormURL = "https://fixme"
+
+    /// Asks a member to update their identity-document details. Says only WHICH kind of problem exists —
+    /// never the number, dates or other values.
+    public static func passportUpdateMail(firstName: String, tourName: String, problems: [PassportProblem],
+                                          signOffName: String) -> (subject: String, body: String) {
+        let missing = problems.compactMap { if case .missing(let f) = $0 { return f.mailLabel } else { return nil } }
+        let unreadable = problems.compactMap { if case .unreadable(let f) = $0 { return f.mailLabel } else { return nil } }
+        var points: [String] = []
+        if !missing.isEmpty { points.append("Some details are missing: \(missing.joined(separator: ", ")).") }
+        if !unreadable.isEmpty { points.append("Some details could not be read: \(unreadable.joined(separator: ", ")).") }
+        if problems.contains(where: { if case .expired = $0 { return true } else { return false } }) {
+            points.append("The document on record has expired.")
+        } else if problems.contains(where: { if case .notValidLongEnough = $0 { return true } else { return false } }) {
+            points.append("The document on record is not valid long enough — it must be valid until at least one week after the end of the tour.")
+        }
+        let body = """
+        Dear \(firstName.isEmpty ? "participant" : firstName),
+
+        thank you for registering for the Fulbright study tour “\(tourName)”.
+
+        The institutions we visit require the identity-document details of every participant in advance — they need \
+        them for their security clearance and visitor registration, and we can only bring you along if they have them. \
+        Your details in our records are not complete yet:
+
+        \(points.map { "• " + $0 }.joined(separator: "\n"))
+
+        Please update your details using this form: \(passportUpdateFormURL)
+
+        For your security, please do not send passport or ID numbers by email. If you have any questions, simply reply to this message.
+
+        \(signOff(signOffName))
+        """
+        return ("Action needed: your ID document details for the study tour “\(tourName)”", body)
+    }
+
+    /// Reminds a member to bring the identity document on record (type only, never the number).
+    public static func bringDocumentMail(firstName: String, tourName: String, documentType: String,
+                                         tourStart: Date, signOffName: String) -> (subject: String, body: String) {
+        let df = DateFormatter(); df.dateStyle = .long; df.locale = Locale(identifier: "en_GB")
+        let type = documentType.lowercased()
+        let doc = type.contains("pass") ? "passport"
+            : (type.contains("id") || type.contains("personal")) ? "national identity card" : ""
+        let what = doc.isEmpty
+            ? "the passport or national identity card you registered with"
+            : "your \(doc) — that is the document we have on record for you and the one the institutions expect to see"
+        let body = """
+        Dear \(firstName.isEmpty ? "participant" : firstName),
+
+        a short reminder for the Fulbright study tour “\(tourName)”, starting on \(df.string(from: tourStart)):
+
+        Please bring \(what). The institutions we visit check every participant's identity at the entrance, and \
+        without the registered document you may not be admitted.
+
+        If you will travel with a different document, please let us know as soon as possible.
+
+        \(signOff(signOffName))
+        """
+        return ("Reminder: bring your \(doc.isEmpty ? "passport or ID card" : doc) to the study tour “\(tourName)”", body)
+    }
+
     // MARK: Record proposals (new Leads / Contacts)
 
     /// Returns a proposal only for tour-related mail from people not yet in Salesforce (by email).

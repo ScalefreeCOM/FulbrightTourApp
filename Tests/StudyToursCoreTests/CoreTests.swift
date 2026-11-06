@@ -48,14 +48,38 @@ final class CleansingTests: XCTestCase {
         XCTAssertNil(Countries.normalize("Atlantis"))
     }
 
-    func testPassportExpiryRules() {
-        let expired = Participant(id: "L1", values: [.firstName: "Jane", .lastName: "Doe", .passportExpiry: "2026-09-01", .passportNumber: "C01X00T47"])
-        let short = Participant(id: "L2", values: [.firstName: "John", .lastName: "Doe", .passportExpiry: "2026-12-01", .passportNumber: "C01X00T48"])
-        let fine = Participant(id: "L3", values: [.firstName: "Max", .lastName: "Muster", .passportExpiry: "2030-01-01", .passportNumber: "C01X00T49"])
-        let issues = cleanser().run([expired, short, fine]).issues
-        XCTAssertTrue(issues.contains { $0.participantId == "L1" && $0.severity == .error && $0.field == .passportExpiry })
-        XCTAssertTrue(issues.contains { $0.participantId == "L2" && $0.severity == .warning && $0.field == .passportExpiry })
-        XCTAssertFalse(issues.contains { $0.participantId == "L3" && $0.field == .passportExpiry })
+    func doc(_ id: String, expiry: String, number: String = "X") -> Participant {
+        Participant(id: id, values: [.firstName: "Jane", .lastName: "Doe", .birthDate: "1990-01-01", .nationality: "Germany",
+                                     .identificationType: "Passport", .passportNumber: number, .passportExpiry: expiry,
+                                     .passportIssuingCountry: "Germany"])
+    }
+
+    func testPassportValidUntilOneWeekAfterTour() {
+        // tour ends 2026-09-30 → documents must be valid until at least 2026-10-07; "today" is before the tour
+        let c = Cleanser(settings: CleansingSettings(), tourEnd: tourEnd, requiredFields: [], today: Dates.parse("2026-06-01")!)
+        XCTAssertEqual(c.passportProblems(doc("ok", expiry: "2026-10-07")), [])
+        XCTAssertEqual(c.passportProblems(doc("short", expiry: "2026-10-06")), [.notValidLongEnough(Dates.parse("2026-10-06")!)])
+        XCTAssertEqual(c.passportProblems(doc("old", expiry: "2026-05-01")), [.expired(Dates.parse("2026-05-01")!)])
+        // presence only — any number format is accepted, no correction proposed
+        XCTAssertEqual(c.passportProblems(doc("odd", expiry: "2030-01-01", number: "a-1")), [])
+        XCTAssertTrue(c.run([doc("odd", expiry: "2030-01-01", number: "a-1")]).changes.filter { $0.field == .passportNumber }.isEmpty)
+        // missing and unreadable fields are reported
+        var missing = doc("m", expiry: "soon"); missing[.passportIssuingCountry] = ""
+        XCTAssertEqual(Set(c.passportProblems(missing)), [.unreadable(.passportExpiry), .missing(.passportIssuingCountry)])
+    }
+
+    func testMemberMailsContainNoDocumentData() {
+        let c = Cleanser(settings: CleansingSettings(), tourEnd: tourEnd, requiredFields: [], today: Dates.parse("2026-06-01")!)
+        var p = doc("L1", expiry: "2026-10-01", number: "C01X00T47"); p[.passportIssuingCountry] = ""
+        let m = Assistant.passportUpdateMail(firstName: "Jane", tourName: "Brussels 2026", problems: c.passportProblems(p), signOffName: "Michael")
+        XCTAssertFalse(m.body.contains("C01X00T47")); XCTAssertFalse(m.body.contains("2026-10-01")); XCTAssertFalse(m.body.contains("2026-10"))
+        XCTAssertTrue(m.body.contains("issuing country")); XCTAssertTrue(m.body.contains("not valid long enough"))
+        XCTAssertTrue(m.body.contains("institutions we visit require")); XCTAssertTrue(m.body.contains(Assistant.passportUpdateFormURL))
+        XCTAssertTrue(m.body.hasSuffix("Best regards,\nMichael"))
+        let r = Assistant.bringDocumentMail(firstName: "Jane", tourName: "Brussels 2026", documentType: "National/Personal ID card",
+                                            tourStart: Dates.parse("2026-09-28")!, signOffName: "Michael")
+        XCTAssertTrue(r.body.contains("national identity card")); XCTAssertFalse(r.body.contains("C01X00T47"))
+        XCTAssertTrue(Assistant.bringDocumentMail(firstName: "", tourName: "T", documentType: "Passport", tourStart: Date(), signOffName: "M").subject.contains("passport"))
     }
 
     func testRequiredFieldsAndChanges() {

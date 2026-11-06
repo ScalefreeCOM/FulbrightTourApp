@@ -321,6 +321,19 @@ public enum ParticipantField: String, Codable, CodingKeyRepresentable, CaseItera
 
     public var isDate: Bool { self == .birthDate || self == .passportExpiry }
 
+    /// How the field is named in mails to members.
+    public var mailLabel: String {
+        switch self {
+        case .birthDate: return "date of birth"
+        case .nationality: return "citizenship"
+        case .identificationType: return "type of document (passport or ID card)"
+        case .passportNumber: return "passport/ID number"
+        case .passportExpiry: return "expiry date"
+        case .passportIssuingCountry: return "issuing country"
+        default: return label.lowercased()
+        }
+    }
+
     public static let defaultHostExport: [ParticipantField] =
         [.lastName, .firstName, .birthDate, .nationality, .passportNumber]
 
@@ -419,7 +432,6 @@ public struct AssistantSettings: Codable, Hashable, Sendable {
 
 public struct CleansingSettings: Codable, Hashable, Sendable {
     public var defaultCountryCallingCode: String = "+49"
-    public var passportMinValidityMonths: Int = 6
     public init() {}
 }
 

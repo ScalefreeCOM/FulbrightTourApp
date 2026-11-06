@@ -296,6 +296,11 @@ struct RegistrationTools: View {
                     HStack {
                         Button("Select all") { state.selectedChanges = Set(report.changes.map(\.id)) }
                         Button("Select none") { state.selectedChanges = [] }
+                        let phones = report.changes.filter { $0.field == .phone || $0.field == .emergencyPhone }.count
+                        if phones > 0 {
+                            Button("Convert all \(phones) phone numbers") { state.convertAllPhoneNumbers() }
+                                .help("Saves only the phone numbers, in international format (ITU-T E.164, e.g. +4917612345678)")
+                        }
                         Spacer()
                         Button("Save \(state.selectedChanges.count) corrections") { state.applySelectedChanges() }
                             .buttonStyle(.borderedProminent).tint(Theme.fbBlue).disabled(state.selectedChanges.isEmpty)
@@ -329,9 +334,68 @@ struct RegistrationTools: View {
                 }
             }
         }
+        if !state.participants.isEmpty { IDDocumentMails() }
     }
 
     private func mask(_ s: String) -> String { s.count <= 3 ? s : String(repeating: "•", count: s.count - 3) + s.suffix(3) }
+}
+
+/// Mails to attendees about their ID document: ask for missing/invalid details, remind them to bring it.
+/// The mails never contain document data; each one is logged on the member.
+struct IDDocumentMails: View {
+    @Environment(AppState.self) private var state
+    @State private var confirmAll = false
+    @State private var confirmReminder = false
+
+    var body: some View {
+        let problems = state.membersWithPassportProblems
+        let open = problems.filter { !state.passportRequestSent.contains($0.member.id) }
+        Card(title: "ID documents — \(problems.count) of \(state.participants.count) attendees need an update") {
+            Text("Documents must be complete and valid until at least one week after the last day of the program. The update request explains that the institutions require the details, lists only what kind of problem there is (no numbers or dates) and links to the update form.")
+                .font(.caption).foregroundStyle(.secondary)
+            ForEach(problems, id: \.member.id) { entry in
+                HStack {
+                    Text(entry.member.displayName).bold().frame(width: 170, alignment: .leading)
+                    Text(summary(entry.problems)).foregroundStyle(.secondary).lineLimit(2)
+                    Spacer()
+                    if state.passportRequestSent.contains(entry.member.id) {
+                        Label("Requested", systemImage: "checkmark").font(.caption).foregroundStyle(.green)
+                    } else {
+                        Button("Ask for update") { state.requestPassportUpdates([entry.member.id]) }
+                            .disabled(!EmailRules.isValid(entry.member[.email]) || !state.googleConnected)
+                            .help(EmailRules.isValid(entry.member[.email]) ? "Sends the update request to \(entry.member[.email])" : "No valid email address")
+                    }
+                }
+            }
+            HStack {
+                if !open.isEmpty {
+                    Button("Ask all \(open.count) for an update…") { confirmAll = true }
+                        .buttonStyle(.borderedProminent).tint(Theme.fbBlue).disabled(!state.googleConnected)
+                }
+                Spacer()
+                Button("Remind all \(state.participants.count) attendees to bring their ID document…") { confirmReminder = true }
+                    .disabled(!state.googleConnected)
+                    .help("Names the document type on record (passport or national ID card) — never the number")
+            }
+        }
+        .confirmationDialog("Send the update request to \(open.count) attendees?", isPresented: $confirmAll) {
+            Button("Send \(open.count) emails") { state.requestPassportUpdates(open.map(\.member.id)) }
+        } message: { Text("One email per attendee via your Gmail, each logged on the member.") }
+        .confirmationDialog("Remind all \(state.participants.count) attendees to bring their passport or ID card?", isPresented: $confirmReminder) {
+            Button("Send \(state.participants.count) emails") { state.sendDocumentReminders() }
+        } message: { Text("One email per attendee via your Gmail, each logged on the member. The email names the document type on record, not the number.") }
+    }
+
+    private func summary(_ problems: [PassportProblem]) -> String {
+        problems.map {
+            switch $0 {
+            case .missing(let f): return "\(f.label) missing"
+            case .unreadable(let f): return "\(f.label) unreadable"
+            case .expired: return "expired"
+            case .notValidLongEnough: return "not valid long enough"
+            }
+        }.joined(separator: " · ")
+    }
 }
 
 // MARK: - 4 Submissions & logistics

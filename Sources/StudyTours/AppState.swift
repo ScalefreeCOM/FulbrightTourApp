@@ -488,10 +488,69 @@ final class AppState {
         }
     }
 
+    var cleanser: Cleanser { Cleanser(settings: settings.cleansing, tourEnd: tour.endDate, requiredFields: requiredFields) }
+
     func runCleansing() {
-        let c = Cleanser(settings: settings.cleansing, tourEnd: tour.endDate, requiredFields: requiredFields)
-        report = c.run(participants)
+        report = cleanser.run(participants)
         selectedChanges = Set(report?.changes.map(\.id) ?? [])
+    }
+
+    /// Selects only the phone-number conversions (international format) and saves them.
+    func convertAllPhoneNumbers() {
+        guard let report else { return }
+        selectedChanges = Set(report.changes.filter { $0.field == .phone || $0.field == .emergencyPhone }.map(\.id))
+        applySelectedChanges()
+    }
+
+    // MARK: Mails to members about their ID document (no document data in the mail; every mail is logged)
+
+    /// Members who were asked to update / reminded in this session (shown in the list).
+    var passportRequestSent: Set<String> = []
+    var documentReminderSent: Set<String> = []
+
+    /// Attendees with a problem in their ID-document data.
+    var membersWithPassportProblems: [(member: Participant, problems: [PassportProblem])] {
+        let c = cleanser
+        return participants.map { ($0, c.passportProblems($0)) }.filter { !$0.1.isEmpty }
+    }
+
+    func requestPassportUpdates(_ ids: [String]) {
+        let c = cleanser
+        let targets = participants.filter { ids.contains($0.id) }.map { ($0, c.passportProblems($0)) }.filter { !$0.1.isEmpty }
+        sendMemberMails(label: "update requests", targets.map { member, problems in
+            (member, Assistant.passportUpdateMail(firstName: member[.firstName], tourName: tour.name, problems: problems,
+                                                  signOffName: signOffName))
+        }) { self.passportRequestSent.insert($0) }
+    }
+
+    func sendDocumentReminders() {
+        sendMemberMails(label: "reminders", participants.map { member in
+            (member, Assistant.bringDocumentMail(firstName: member[.firstName], tourName: tour.name,
+                                                 documentType: member[.identificationType], tourStart: tour.startDate,
+                                                 signOffName: signOffName))
+        }) { self.documentReminderSent.insert($0) }
+    }
+
+    /// Sends one mail per member via Gmail and logs each on the member in Salesforce. One failure doesn't stop the rest.
+    private func sendMemberMails(label: String, _ mails: [(Participant, (subject: String, body: String))], sent mark: @escaping (String) -> Void) {
+        run("Sending \(mails.count) \(label)…") {
+            var sent = 0, noEmail = 0, failed = 0, notLogged = 0
+            for (member, mail) in mails {
+                guard EmailRules.isValid(member[.email]) else { noEmail += 1; continue }
+                do {
+                    let how = try await self.sendViaGmail(to: member[.email], subject: mail.subject, body: mail.body,
+                                                          whoId: member.id, whatId: nil)
+                    if how.contains("failed") || how.contains("no database record") { notLogged += 1 }
+                    sent += 1
+                    mark(member.id)
+                } catch { failed += 1 }
+            }
+            var note = "\(label.prefix(1).uppercased() + label.dropFirst()) sent to \(sent) members"
+            if noEmail > 0 { note += " · \(noEmail) without a valid email" }
+            if failed > 0 { note += " · \(failed) failed" }
+            if notLogged > 0 { note += " · \(notLogged) not logged in the database" }
+            if failed > 0 || notLogged > 0 { throw AppError(note) } else { self.flash(note) }
+        }
     }
 
     func applySelectedChanges() {

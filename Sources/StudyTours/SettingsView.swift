@@ -165,8 +165,8 @@ struct AssistantSettingsView: View {
             }
             Section("Data quality") {
                 TextField("Default country calling code", text: $state.settings.cleansing.defaultCountryCallingCode)
-                Stepper("Passport must be valid \(state.settings.cleansing.passportMinValidityMonths) months after the tour",
-                        value: $state.settings.cleansing.passportMinValidityMonths, in: 0...24)
+                Text("Passports/IDs must be valid until at least one week after the last day of the program.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Section("Reply drafts") {
                 Text("Gemini drafts a reply for every mail that needs one — from members, officials and new senders. Nothing is ever sent automatically: you review, edit and send each reply yourself.")
