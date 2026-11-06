@@ -373,9 +373,12 @@ struct IDDocumentMails: View {
                         .buttonStyle(.borderedProminent).tint(Theme.fbBlue).disabled(!state.googleConnected)
                 }
                 Spacer()
+                // only useful before the tour: disabled from the first day of the program on
+                let beforeTour = Date() < Calendar.current.startOfDay(for: state.tour.startDate)
                 Button("Remind all \(state.participants.count) attendees to bring their ID document…") { confirmReminder = true }
-                    .disabled(!state.googleConnected)
-                    .help("Names the document type on record (passport or national ID card) — never the number")
+                    .disabled(!state.googleConnected || !beforeTour)
+                    .help(beforeTour ? "Names the document type on record (passport or national ID card) — never the number"
+                                     : "Only available before the first day of the tour")
             }
         }
         .confirmationDialog("Send the update request to \(open.count) attendees?", isPresented: $confirmAll) {
@@ -506,8 +509,10 @@ struct TourDayTools: View {
     @Environment(AppState.self) private var state
     var body: some View {
         Card(title: "Lists for the road") {
-            Text("Attendance sheet per day for the attending members.").font(.caption).foregroundStyle(.secondary)
-            Button("Export attendance list") { state.exportTourLists() }.disabled(state.participants.isEmpty)
+            Text("Attendance sheet per day for the attending members — loaded from the database if needed.").font(.caption).foregroundStyle(.secondary)
+            Button("Export attendance list") { state.exportTourLists() }
+                .disabled(!state.salesforceConnected || state.tour.campaignId.isEmpty)
+                .help(state.tour.campaignId.isEmpty ? "Select the tour's program first" : "Choose where to save the Excel file")
         }
         Card(title: "Today") {
             let today = state.tour.agenda.filter { Calendar.current.isDateInToday($0.start) }
@@ -537,9 +542,13 @@ struct WrapUpTools: View {
             Text("Fields: " + ParticipantField.defaultScrub.map(\.label).joined(separator: ", "))
                 .font(.callout.bold())
             HStack {
+                // only after the tour: enabled from the day after the program's last day
+                let tourOver = Date() >= (Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: state.tour.endDate)) ?? state.tour.endDate)
                 Button("Clear fields in the database…") { confirmSF = true }
                     .buttonStyle(.borderedProminent).tint(Theme.usRed)
-                    .disabled(!state.salesforceConnected)
+                    .disabled(!state.salesforceConnected || !tourOver)
+                    .help(tourOver ? "Clears the fields listed above on all program members"
+                                   : "Available from the day after the last day of the tour (\(state.tour.endDate.formatted(date: .abbreviated, time: .omitted)))")
                 Button("Delete all exported files…") { confirmFiles = true }.tint(Theme.usRed)
             }
         }

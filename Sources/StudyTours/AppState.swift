@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import AppKit
 import StudyToursCore
 
@@ -96,6 +97,8 @@ final class AppState {
     /// Observable mirror of the login state. The clients read the Keychain, which SwiftUI cannot observe,
     /// so views use these and they are refreshed after every connect/disconnect.
     private(set) var salesforceConnected = false
+    /// Signed in, but the last attempt to reach Salesforce failed (shown in the footer, offers "Reconnect").
+    var salesforceProblem: String?
     private(set) var googleConnected = false
     private(set) var geminiConfigured = false
     /// The saved Gemini key is the sponsored one (footer: "Gemini AI is sponsored by Scalefree").
@@ -292,7 +295,29 @@ final class AppState {
     // MARK: Setup
 
     func loadPrograms() {
-        run("Loading programs…") { self.programsInOrg = try await self.salesforce.campaigns() }
+        run("Loading programs…") {
+            do { self.programsInOrg = try await self.salesforce.campaigns(); self.salesforceProblem = nil }
+            catch { self.salesforceProblem = error.localizedDescription; throw error }
+        }
+    }
+
+    /// Starts a fresh Salesforce session with the saved login and reloads programs, fields and users.
+    func reconnectSalesforce() {
+        guard salesforce.isConnected else { selection = .settings; return }
+        run("Reconnecting to Salesforce…") {
+            self.salesforce.resetSession()
+            do {
+                try await self.salesforceStartup()
+                self.salesforceProblem = nil
+                self.lastError = nil
+                await self.refreshProgram()
+                self.flash("Salesforce reconnected")
+            } catch {
+                self.salesforceProblem = error.localizedDescription
+                throw error
+            }
+            self.refreshConnectionState()
+        }
     }
 
     // MARK: Tour = Salesforce program (native fields, Tasks, Opportunities)
@@ -391,7 +416,10 @@ final class AppState {
     func startPulling() {
         pullTask?.cancel()
         pullTask = Task { [weak self] in
-            if let self, self.salesforce.isConnected { try? await self.salesforceStartup() }
+            if let self, self.salesforce.isConnected {
+                do { try await self.salesforceStartup(); self.salesforceProblem = nil }
+                catch { self.salesforceProblem = error.localizedDescription }
+            }
             self?.refreshConnectionState()
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(60))
@@ -619,18 +647,31 @@ final class AppState {
         }
     }
 
+    /// Attendance sheet for the road: loads the attending members if needed, then the user chooses where to save it.
     func exportTourLists() {
-        guard !participants.isEmpty else { lastError = "Load members first (Registration phase)."; return }
-        run("Exporting attendance list…") {
+        run("Preparing attendance list…") {
+            if self.participants.isEmpty {
+                guard !self.tour.campaignId.isEmpty else { throw AppError("Select the tour's program first.") }
+                self.participants = try await self.salesforce.leads(campaignId: self.tour.campaignId)
+                self.report = nil
+            }
+            guard !self.participants.isEmpty else { throw AppError("This program has no attending members yet.") }
             let sorted = self.participants.sorted { $0[.lastName] < $1[.lastName] }
             let attendance = XLSXWriter.Sheet(name: "Attendance", title: "\(self.tour.name) – attendance",
                 headers: ["No.", "Last name", "First name", "Organization", "Phone", "Day 1", "Day 2", "Day 3", "Day 4"],
                 rows: sorted.enumerated().map { [String($0.offset + 1), $0.element[.lastName], $0.element[.firstName], $0.element[.organization], $0.element[.phone], "", "", "", ""] })
             let data = XLSXWriter.build([attendance])
-            let name = "\(self.tour.name.replacingOccurrences(of: " ", with: "_"))_tour_lists.xlsx"
-            let url = Store.exportsDirectory.appendingPathComponent(name)
-            try data.write(to: url, options: [.atomic])
+            let panel = NSSavePanel()
+            panel.title = "Save attendance list"
+            panel.nameFieldStringValue = "\(self.tour.name.replacingOccurrences(of: "/", with: "-")) – attendance.xlsx"
+            panel.allowedContentTypes = [UTType(filenameExtension: "xlsx") ?? .data]
+            panel.directoryURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
+            panel.canCreateDirectories = true
+            guard panel.runModal() == .OK, let url = panel.url else { return }
+            do { try data.write(to: url, options: [.atomic]) }
+            catch { throw AppError("Could not save the attendance list: \(error.localizedDescription)") }
             NSWorkspace.shared.activateFileViewerSelecting([url])
+            self.flash("Attendance list saved: \(url.lastPathComponent) (\(sorted.count) attendees)")
         }
     }
 

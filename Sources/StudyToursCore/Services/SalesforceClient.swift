@@ -95,10 +95,36 @@ public final class SalesforceClient: @unchecked Sendable {
         Keychain.set(nil, for: Keychain.Key.sfInstance)
     }
 
+    private let refreshLock = NSLock()
+    private var refreshTask: Task<Void, Error>?
+
+    /// Renews the session. Only one renewal runs at a time: parallel requests (e.g. at start-up) wait for it
+    /// instead of sending their own — Salesforce rejects concurrent token requests for the same refresh token.
     private func refresh() async throws {
+        let task: Task<Void, Error> = refreshLock.withLock {
+            if let running = refreshTask { return running }
+            let t = Task { try await self.performRefresh() }
+            refreshTask = t
+            return t
+        }
+        defer { refreshLock.withLock { if refreshTask == task { refreshTask = nil } } }
+        try await task.value
+    }
+
+    /// Forgets the current session so the next request signs in again with the saved login ("Reconnect").
+    public func resetSession() { accessToken = nil }
+
+    private func performRefresh() async throws {
         guard let rt = Keychain.get(Keychain.Key.sfRefresh) else { throw AppError("Salesforce is not connected.") }
+        let params = ["grant_type": "refresh_token", "refresh_token": rt, "client_id": settings.effectiveClientId]
         do {
-            try await token(["grant_type": "refresh_token", "refresh_token": rt, "client_id": settings.effectiveClientId])
+            do {
+                try await token(params)
+            } catch let e as APIError where e.status == 400 && !e.body.contains("invalid_grant") {
+                // transient rejection (e.g. a concurrent request from another app instance): one retry after a pause
+                try await Task.sleep(for: .seconds(1.5))
+                try await token(params)
+            }
         } catch let e as APIError where e.body.contains("invalid_grant") {
             // Sign-in expired or was revoked (refresh-token policy, password change, admin): sign out cleanly.
             disconnect()

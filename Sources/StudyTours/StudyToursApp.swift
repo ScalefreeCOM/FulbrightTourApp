@@ -98,6 +98,10 @@ struct StatusBar: View {
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: "exclamationmark.triangle.fill").font(.title3)
                     Text(e).lineLimit(8).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                    if state.salesforceProblem != nil && state.salesforceConnected {
+                        Button("Reconnect") { state.reconnectSalesforce() }
+                            .buttonStyle(.borderedProminent).tint(.white.opacity(0.25)).fixedSize()
+                    }
                     Button { state.lastError = nil } label: { Image(systemName: "xmark") }.buttonStyle(.plain).help("Dismiss")
                 }
                 .foregroundStyle(.white)
@@ -176,7 +180,7 @@ struct ProgramSelector: View {
                     Picker("", selection: Binding(
                         get: { state.tour.campaignId },
                         set: { id in state.selectProgram(id: id, name: state.programsInOrg.first { $0.id == id }?.name ?? "") })) {
-                        Text(state.programsInOrg.isEmpty ? "Loading programs…" : "Choose program…").tag("")
+                        Text(state.programsInOrg.isEmpty ? (state.salesforceProblem != nil ? "Not reachable" : "Loading programs…") : "Choose program…").tag("")
                         // keep the linked program selectable even if it is no longer active
                         if !state.tour.campaignId.isEmpty, !state.programsInOrg.contains(where: { $0.id == state.tour.campaignId }) {
                             Text(state.tour.campaignName).tag(state.tour.campaignId)
@@ -189,6 +193,13 @@ struct ProgramSelector: View {
                     if !state.tour.campaignId.isEmpty, let u = state.salesforce.recordURL(state.tour.campaignId) {
                         Link(destination: u) { Image(systemName: "arrow.up.right.square") }.help("Open program in the database")
                     }
+                }
+                if state.salesforceProblem != nil {
+                    Button { state.reconnectSalesforce() } label: {
+                        Label("Database not reachable — Reconnect", systemImage: "arrow.triangle.2.circlepath").frame(maxWidth: .infinity)
+                    }
+                    .glassButton()
+                    .help(state.salesforceProblem ?? "")
                 }
                 HStack {
                     Image(systemName: state.storageMissingFields.isEmpty ? "icloud.and.arrow.up" : "exclamationmark.icloud")
@@ -382,16 +393,21 @@ struct ConnectionDot: View {
     let name: String
     let on: Bool
     var detail: String? = nil
+    /// Signed in but not reachable: orange dot, click runs `reconnect`.
+    var problem: String? = nil
+    var reconnect: (() -> Void)? = nil
     var body: some View {
-        Button { state.selection = .settings } label: {
+        Button { if on, problem != nil, let reconnect { reconnect() } else { state.selection = .settings } } label: {
             HStack(spacing: 5) {
-                Circle().fill(on ? Color.green : Color.gray).frame(width: 7, height: 7)
+                Circle().fill(!on ? Color.gray : problem != nil ? Color.orange : Color.green).frame(width: 7, height: 7)
                 Text(name).font(.caption)
             }
             .foregroundStyle(.white.opacity(on ? 0.9 : 0.6))
         }
         .buttonStyle(.plain)
-        .help("\(name): \(on ? "connected" : "not set up — click to open Settings")\(detail.map { " · " + $0 } ?? "")")
+        .help(!on ? "\(name): not set up — click to open Settings"
+              : problem != nil ? "\(name): connection problem — click to reconnect (\(problem!))"
+              : "\(name): connected\(detail.map { " · " + $0 } ?? "")")
     }
 }
 
@@ -403,7 +419,8 @@ struct PartnerFooter: View {
         HStack(spacing: 14) {
             // connection status
             HStack(spacing: 10) {
-                ConnectionDot(name: "Salesforce", on: state.salesforceConnected)
+                ConnectionDot(name: "Salesforce", on: state.salesforceConnected,
+                              problem: state.salesforceProblem, reconnect: { state.reconnectSalesforce() })
                 ConnectionDot(name: "Google", on: state.googleConnected,
                               detail: state.lastScan.map { "inbox scanned \($0.formatted(date: .omitted, time: .shortened))" })
                 ConnectionDot(name: "Gemini", on: state.geminiConfigured)
