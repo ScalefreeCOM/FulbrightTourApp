@@ -281,32 +281,57 @@ struct CCRow: View {
     @State private var typed = ""
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text("CC").font(.caption.bold()).foregroundStyle(.secondary).frame(width: 22, alignment: .leading)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 4) {
-                    if cc.isEmpty { Text("nobody").font(.caption).foregroundStyle(.tertiary) }
-                    ForEach(cc, id: \.self) { a in
-                        HStack(spacing: 3) {
-                            Text(name(for: a)).font(.caption)
-                            Button { state.setReplyCC(itemId, cc.filter { $0 != a }) } label: { Image(systemName: "xmark.circle.fill") }
-                                .buttonStyle(.plain).foregroundStyle(.secondary).help("Remove \(a)")
-                        }
-                        .padding(.horizontal, 7).padding(.vertical, 2)
-                        .background(.quaternary, in: Capsule())
-                        .help(a)
+        // one line when there is room, otherwise the add controls move to a second line
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .center, spacing: 6) { label; chips; Spacer(minLength: 8); controls }
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) { label; chips }
+                HStack(spacing: 6) { controls; Spacer() }
+            }
+        }
+    }
+
+    private var label: some View {
+        Text("CC").font(.caption.bold()).foregroundStyle(.secondary).frame(width: 22, alignment: .leading)
+    }
+
+    private var chips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 4) {
+                if cc.isEmpty { Text("nobody").font(.caption).foregroundStyle(.tertiary) }
+                ForEach(cc, id: \.self) { a in
+                    HStack(spacing: 3) {
+                        Text(name(for: a)).font(.caption).lineLimit(1)
+                        Button { state.setReplyCC(itemId, cc.filter { $0 != a }) } label: { Image(systemName: "xmark.circle.fill") }
+                            .buttonStyle(.plain).foregroundStyle(.secondary).help("Remove \(a)")
                     }
+                    .padding(.horizontal, 7).padding(.vertical, 2)
+                    .background(.quaternary, in: Capsule())
+                    .help(a)
                 }
             }
+        }
+        .frame(minWidth: 80)
+    }
+
+    private var controls: some View {
+        HStack(spacing: 6) {
             TextField("add address", text: $typed).textFieldStyle(.roundedBorder).font(.caption).frame(width: 150)
                 .onSubmit { add(typed) }
             Menu {
-                let available = state.users.filter { !$0.email.isEmpty && !cc.contains($0.email) && $0.email != state.myMailAddress }
-                if available.isEmpty { Text(state.users.isEmpty ? "Salesforce users not loaded" : "Everyone is already in CC") }
-                ForEach(available, id: \.id) { u in Button("\(u.name) <\(u.email)>") { add(u.email) } }
+                if candidates.isEmpty { Text(state.users.isEmpty ? "Salesforce users not loaded" : "Everyone is already in CC") }
+                ForEach(candidates, id: \.id) { u in Button("\(u.name) <\(u.email)>") { add(u.email) } }
             } label: { Label("Add CC", systemImage: "person.badge.plus") }
             .menuStyle(.borderlessButton).fixedSize()
             .help("Add a Salesforce user (team member) in CC")
+        }
+    }
+
+    /// Salesforce users that can be CC'd: real people with an email, not technical/integration users.
+    private var candidates: [(id: String, name: String, email: String)] {
+        state.users.filter {
+            !$0.email.isEmpty && !cc.contains($0.email) && $0.email != state.myMailAddress
+                && !$0.name.localizedCaseInsensitiveContains("integration") && !Assistant.isAutomated($0.email)
         }
     }
 
@@ -338,7 +363,8 @@ struct ReplyPanel: View {
                     Label(item.answered ? "Replied" : "Reply", systemImage: item.answered ? "checkmark.circle.fill" : "arrowshape.turn.up.left")
                         .font(.headline)
                     Text(item.draft == nil ? "Drafted by Gemini — sent only when you click Send" : item.status)
-                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        .font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
+                        .layoutPriority(-1)
                     Spacer()
                     Button { withAnimation { expanded.toggle() } } label: { Image(systemName: expanded ? "chevron.down" : "chevron.up") }
                         .buttonStyle(.plain).help(expanded ? "Fold the reply panel" : "Show the reply panel")
@@ -354,16 +380,20 @@ struct ReplyPanel: View {
                         if let missing = item.draft?.missingInfo, !missing.isEmpty {
                             Label("Missing: " + missing.joined(separator: "; "), systemImage: "exclamationmark.triangle")
                                 .foregroundStyle(.orange).font(.callout)
+                                .lineLimit(3).fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         TextEditor(text: $state.inbox[i].draftBody)
                             .font(.body).frame(height: 170)
                             .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.quaternary))
+                        if item.identity.record == nil {
+                            Text("Add the sender to Salesforce first, so the email is logged.").font(.caption).foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } else if item.draftBody.contains("[CHECK") {
+                            Text("Replace the [CHECK …] parts before sending.").font(.caption).foregroundStyle(.orange)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                         HStack {
-                            if item.identity.record == nil {
-                                Text("Add the sender to Salesforce first, so the email is logged.").font(.caption).foregroundStyle(.secondary)
-                            } else if item.draftBody.contains("[CHECK") {
-                                Text("Replace the [CHECK …] parts before sending.").font(.caption).foregroundStyle(.orange)
-                            }
                             Spacer()
                             Button("Re-draft") { state.draftReply(itemId) }
                             Button("Send via Gmail") { confirmSend = true }

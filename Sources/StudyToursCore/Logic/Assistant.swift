@@ -228,11 +228,19 @@ public enum Assistant {
         return lower.hasPrefix("re:") || lower.hasPrefix("aw:") ? original : "Re: \(original)"
     }
 
+    /// Fixed line under every outgoing mail (not a setting).
+    public static let sentVia = "Sent via https://scalefr.ee/fulbrightapp"
+
+    /// Appends the "Sent via" line once (mails composed by `composeBody` already contain it).
+    public static func withSentVia(_ body: String) -> String {
+        body.contains(sentVia) ? body : body.trimmingCharacters(in: .whitespacesAndNewlines) + "\n\n" + sentVia
+    }
+
     public static func composeBody(_ reply: String, signature: String, original: MailMessage) -> String {
         let df = DateFormatter(); df.dateStyle = .medium; df.timeStyle = .short
         let quoted = MailBody.stripQuoted(original.body).split(separator: "\n", omittingEmptySubsequences: false)
             .prefix(40).map { "> " + $0 }.joined(separator: "\n")
-        return "\(reply.trimmingCharacters(in: .whitespacesAndNewlines))\n\n\(signature)\n\nOn \(df.string(from: original.date)), \(original.fromName) wrote:\n\(quoted)"
+        return "\(reply.trimmingCharacters(in: .whitespacesAndNewlines))\n\n\(signature)\n\n\(sentVia)\n\nOn \(df.string(from: original.date)), \(original.fromName) wrote:\n\(quoted)"
     }
 
     // MARK: Record proposals (new Leads / Contacts)

@@ -219,6 +219,15 @@ final class AssistantTests: XCTestCase {
         XCTAssertTrue(Assistant.replyPrompt(m, tour: tour(), settings: AssistantSettings(), redact: true).system.contains("Start the body with a greeting line"))
     }
 
+    func testSentViaLineOnOutgoingMail() {
+        let reply = Assistant.composeBody("Thanks!", signature: "Kind regards", original: msg(from: "Jane Doe <jane@example.com>"))
+        // below the signature, above the quoted original — and only once
+        let sig = reply.range(of: "Kind regards")!, via = reply.range(of: Assistant.sentVia)!, quote = reply.range(of: "wrote:")!
+        XCTAssertTrue(sig.upperBound <= via.lowerBound && via.upperBound <= quote.lowerBound)
+        XCTAssertEqual(Assistant.withSentVia(reply), reply)
+        XCTAssertEqual(Assistant.withSentVia("Hello\n"), "Hello\n\n" + Assistant.sentVia)
+    }
+
     func testEmailHeaderParsing() {
         XCTAssertEqual(EmailRules.address(from: "\"Jane Doe\" <Jane@Example.com>"), "jane@example.com")
         XCTAssertEqual(EmailRules.displayName(from: "\"Jane Doe\" <jane@example.com>"), "Jane Doe")

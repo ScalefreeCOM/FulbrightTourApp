@@ -418,7 +418,7 @@ struct PartnerFooter: View {
                 VStack(alignment: .trailing, spacing: 1) {
                     Text("Created and maintained by")
                     if sponsored {
-                        Text("Gemini AI (\(tokens) tokens used) is sponsored by")
+                        Text("\(tokens) AI tokens sponsored by")
                             .help("\(state.geminiTokensUsed.formatted()) Gemini tokens used on this Mac")
                     }
                 }

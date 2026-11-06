@@ -800,6 +800,7 @@ final class AppState {
                       inReplyTo: String? = nil, references: String? = nil,
                       attachments: [MailComposer.Attachment] = [],
                       whoId: String?, whatId: String?) async throws -> String {
+        let body = Assistant.withSentVia(body)   // fixed "Sent via …" line on every outgoing mail
         let raw = MailComposer.raw(to: to, cc: cc, subject: subject, body: body, attachments: attachments,
                                    inReplyTo: inReplyTo, references: references)
         try await google.send(raw: raw, threadId: threadId)
