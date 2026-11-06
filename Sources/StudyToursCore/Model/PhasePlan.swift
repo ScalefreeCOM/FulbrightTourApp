@@ -11,11 +11,11 @@ public enum PhasePlan {
             // 0 Setup
             t(.setup, "Create program, set dates and city", "Coordination", -110),
             t(.setup, "Create tour folder and agenda (shared Drive)", "Coordination", -110),
-            t(.setup, "Link Salesforce program (campaign) for registrations", "Coordination", -105),
+            t(.setup, "Link the program for registrations", "Coordination", -105),
             t(.setup, "Book kick-off team meeting (calendar)", "Coordination", -105),
 
             // 1 Host outreach
-            t(.outreach, "Select host institutions and contacts (Salesforce Organizations)", "Contacts", -100),
+            t(.outreach, "Select host institutions and contacts (organizations in the database)", "Contacts", -100),
             t(.outreach, "Send invitation letters", "Letter", -92),
             t(.outreach, "Follow up on unanswered letters", "Contacts", -80),
             t(.outreach, "Record each host's data requirements and submission deadline", "Contacts", -75),
@@ -48,7 +48,7 @@ public enum PhasePlan {
             // 6 Wrap-up (relative to tour end)
             t(.wrapup, "Thank-you emails to officials (own program)", "Letter", 5),
             t(.wrapup, "Publish report and photos", "Media", 14),
-            t(.wrapup, "Scrub passport data (Salesforce + exports)", "Data Protection", 14),
+            t(.wrapup, "Scrub passport data (database + exports)", "Data Protection", 14),
             t(.wrapup, "Lessons learned / update this plan", "Lead", 21),
         ]
     }

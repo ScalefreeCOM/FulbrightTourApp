@@ -146,7 +146,7 @@ struct ChatSpaceSettings: View {
             Button("Load my spaces") { state.run("Loading Google Chat spaces…") { spaces = try await state.google.chatSpaces() } }
                 .disabled(!state.googleConnected)
         }
-        Text("Messages are read and sent as the Google account signed in above. Create a space in Google Chat for the organising team and add that account.")
+        Text("Messages are read and sent as your own Google account. An admin adds you to the team's Chat space; then pick it here.")
             .font(.caption).foregroundStyle(.secondary)
     }
 }

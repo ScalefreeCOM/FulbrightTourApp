@@ -35,7 +35,7 @@ the last column. Names in *italics* are labels used in the Fulbright org (e.g. C
 |---|---|---|---|---|
 | `CampaignId`, `LeadId`, `ContactId` | Lookup | Standard | Links members (Leads) and officials (Contacts) to programs | — |
 | `Status` | Picklist | Standard | Value **`Responded`** for members the app adds | `programMember.status`, `programMember.newMemberStatusValue` |
-| `Attendance_Status__c` | Picklist (restricted): Invited, Applied, **Attending**, Cancelled | Prerequisites | Only **Attending** members are participants (lists, checks, deletion) | `programMember.attendanceStatus`, `programMember.attendingValue` |
+| `Attendance_Status__c` | Picklist (restricted): Invited, Applied, **Attending**, Cancelled | Prerequisites | Only **Attending** members are attendees (count, lists, checks, host lists); the after-tour deletion covers all program members regardless of status | `programMember.attendanceStatus`, `programMember.attendingValue` |
 
 ## Lead — *Member* (participants)
 

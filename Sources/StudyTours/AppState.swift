@@ -66,6 +66,8 @@ final class AppState {
 
     // monitoring
     var memberCount: Int?
+    /// Attendees with at least one empty ID-document field (At a Glance).
+    var incompletePassports: Int?
     var unreadCount: Int?
     var lastScan: Date?
 
@@ -73,8 +75,18 @@ final class AppState {
     var syncStatus = "Local only"
     var showNewProgram = false
     var currentUserId: String?
+    /// First name of the signed-in Salesforce user, used to sign drafts.
+    var signOffName: String { Assistant.signOffName(userName: users.first { $0.id == currentUserId }?.name) }
+    /// Full name of the signed-in Salesforce user, used when writing to officials.
+    var signOffFullName: String { Assistant.signOffFullName(userName: users.first { $0.id == currentUserId }?.name) }
+
+    /// Members get the first name; officials the full name (or the first name if the draft already used it).
+    func ensureSignOff(_ body: String, to sender: SenderKind) -> String {
+        sender == .official ? Assistant.ensureSignOff(body, name: signOffFullName, accept: [signOffName])
+                            : Assistant.ensureSignOff(body, name: signOffName)
+    }
     var users: [(id: String, name: String, email: String)] = []
-    /// Address of the shared mailbox (never CC'd on replies).
+    /// Address of the signed-in user's own mailbox (never CC'd on replies).
     var myMailAddress = ""
     var lastSavedBasics: [String: Basics] = [:]
     private var pendingProgramSave: Task<Void, Never>?
@@ -288,7 +300,7 @@ final class AppState {
     /// Switches to the study tour of this program.
     func selectProgram(id: String, name: String) {
         guard !id.isEmpty, id != tour.campaignId else { return }
-        participants = []; report = nil; memberCount = nil; inbox = []; hostVisits = []; hostListDrafts = [:]
+        participants = []; report = nil; memberCount = nil; incompletePassports = nil; inbox = []; hostVisits = []; hostListDrafts = [:]
         if let cached = data.tours.first(where: { $0.campaignId == id }) {
             data.selectedTourId = cached.id
         } else {
@@ -298,19 +310,19 @@ final class AppState {
             data.selectedTourId = t.id
         }
         try? Store.save(data)
-        run("Loading study tour from Salesforce…") { await self.refreshProgram() }
+        run("Loading study tour…") { await self.refreshProgram() }
     }
 
     /// Creates a new program in Salesforce (with folder, agenda and default checklist) and selects it.
     func createProgramTour(name: String, start: Date, end: Date, city: String) {
-        run("Creating program in Salesforce…") {
+        run("Creating program…") {
             let id = try await self.salesforce.createProgram(name: name, start: start, end: end, city: city)
             var t = Tour(name: name, startDate: start, endDate: end)
             t.city = city; t.campaignId = id; t.campaignName = name; t.tasks = []
             self.data.tours.append(t)
             self.data.selectedTourId = t.id
             self.programsInOrg.insert((id: id, name: name), at: 0)
-            self.participants = []; self.report = nil; self.memberCount = nil; self.inbox = []; self.hostVisits = []
+            self.participants = []; self.report = nil; self.memberCount = nil; self.incompletePassports = nil; self.inbox = []; self.hostVisits = []
             self.lastSavedBasics[id] = Basics(t)
             try await self.createDefaultChecklist()
             if self.google.isConnected { try await self.setUpDrive() }
@@ -406,7 +418,7 @@ final class AppState {
         tour.tasks = try await salesforce.checklist(programId: t.campaignId)
     }
 
-    func createDefaultChecklistAction() { run("Creating checklist in Salesforce…") { try await self.createDefaultChecklist() } }
+    func createDefaultChecklistAction() { run("Creating checklist…") { try await self.createDefaultChecklist() } }
 
     /// Updates a checklist item locally and on its Salesforce Task.
     func updateTask(_ item: TaskItem) {
@@ -469,7 +481,7 @@ final class AppState {
     // MARK: Participants & cleansing
 
     func loadParticipants() {
-        run("Loading members from Salesforce…") {
+        run("Loading members…") {
             self.participants = try await self.salesforce.leads(campaignId: self.tour.campaignId)
             self.report = nil
             self.flash("\(self.participants.count) members loaded")
@@ -487,7 +499,7 @@ final class AppState {
         let chosen = report.changes.filter { selectedChanges.contains($0.id) }
         var updates: [String: [ParticipantField: String?]] = [:]
         for c in chosen { updates[c.participantId, default: [:]][c.field] = c.newValue }
-        run("Writing \(chosen.count) corrections to Salesforce…") {
+        run("Saving \(chosen.count) corrections to the database…") {
             let results = try await self.salesforce.updateLeads(updates)
             let failed = results.filter { !$0.success }
             for c in chosen where !failed.contains(where: { $0.id == c.participantId }) {
@@ -583,7 +595,7 @@ final class AppState {
     }
 
     func syncAgenda() {
-        run("Syncing calendar (Salesforce, Google Calendar)…") {
+        run("Syncing calendar…") {
             var t = self.tour
             let tz = TimeZone.current.identifier
             for idx in t.agenda.indices where t.agenda[idx].needsSync {
@@ -613,6 +625,7 @@ final class AppState {
         }
         if salesforce.isConnected, !tour.campaignId.isEmpty {
             memberCount = try? await salesforce.memberCount(campaignId: tour.campaignId)
+            incompletePassports = try? await salesforce.incompletePassportCount(campaignId: tour.campaignId)
         }
     }
 
@@ -773,12 +786,14 @@ final class AppState {
                 // 5. draft a reply for every mail that needs one — the user reviews and sends it, nothing is sent automatically
                 if !item.answered, identity.kind != .team, let t = item.triage, t.needsReply,
                    t.relatedToTour || identity.kind != .unknown, item.draft == nil, gemini.isConfigured {
-                    let p = Assistant.replyPrompt(m, sender: identity.kind, greeting: identity.record?.greeting, tour: tour, knowledgeBase: kb,
+                    let p = Assistant.replyPrompt(m, sender: identity.kind, greeting: identity.record?.greeting,
+                                                  signOffName: signOffName, signOffFullName: signOffFullName,
+                                                  tour: tour, knowledgeBase: kb,
                                                   settings: s.assistant, redact: s.gemini.redactNumbers)
                     if let text = try? await gemini.generate(system: p.system, prompt: p.prompt, json: true, temperature: 0.3),
                        let d = Assistant.decode(DraftReply.self, from: text) {
                         item.draft = d
-                        item.draftBody = d.body
+                        item.draftBody = ensureSignOff(d.body, to: identity.kind)
                         item.status = d.confident && (d.missingInfo ?? []).isEmpty && !d.body.contains("[CHECK")
                             ? "Draft ready — review and send" : "Draft ready — fill in the [CHECK] parts before sending"
                     }
@@ -800,18 +815,19 @@ final class AppState {
                       inReplyTo: String? = nil, references: String? = nil,
                       attachments: [MailComposer.Attachment] = [],
                       whoId: String?, whatId: String?) async throws -> String {
-        let body = Assistant.withSentVia(body)   // fixed "Sent via …" line on every outgoing mail
+        // "via …" line right under the name, then the user's own Gmail signature (once; replies already have it)
+        let body = Assistant.withFooter(body, signature: (try? await google.gmailSignature()) ?? "")
         let raw = MailComposer.raw(to: to, cc: cc, subject: subject, body: body, attachments: attachments,
                                    inReplyTo: inReplyTo, references: references)
         try await google.send(raw: raw, threadId: threadId)
-        guard let whoId else { return "Sent via Gmail (no Salesforce record to log on)" }
+        guard let whoId else { return "Sent via Gmail (no database record to log on)" }
         do {
             let note = attachments.isEmpty ? "" : "\n\nAttachments: " + attachments.map(\.fileName).joined(separator: ", ")
             try await salesforce.logEmailTask(whoId: whoId, whatId: whatId, subject: subject, body: body + note,
                                               date: Date(), direction: .outbound, counterpart: to)
-            return "Sent via Gmail, logged in Salesforce"
+            return "Sent via Gmail, logged in the database"
         } catch {
-            return "Sent via Gmail — logging in Salesforce failed: \(error.localizedDescription)"
+            return "Sent via Gmail — logging in the database failed: \(error.localizedDescription)"
         }
     }
 
@@ -828,7 +844,7 @@ final class AppState {
     @discardableResult
     func sendReply(_ item: InboxItem, body: String) async throws -> String {
         let m = item.message
-        let full = Assistant.composeBody(body, signature: settings.assistant.signature, original: m)
+        let full = Assistant.composeBody(body, signature: (try? await google.gmailSignature()) ?? "", original: m)
         // incoming email on the member (if the scan has not logged it yet)
         if !item.logged, let rec = item.identity.record, rec.kind == .lead || rec.kind == .contact {
             try? await salesforce.logEmailTask(whoId: rec.id, whatId: rec.accountId, subject: m.subject, body: MailBody.stripQuoted(m.body),
@@ -866,25 +882,38 @@ final class AppState {
         let greeting = inbox[i].identity.record?.greeting
         run("Drafting reply with Gemini…") {
             let kb = await self.knowledgeBaseText()
-            let p = Assistant.replyPrompt(m, sender: sender, greeting: greeting, tour: self.tour, knowledgeBase: kb, settings: self.settings.assistant, redact: self.settings.gemini.redactNumbers)
+            let p = Assistant.replyPrompt(m, sender: sender, greeting: greeting, signOffName: self.signOffName,
+                                          signOffFullName: self.signOffFullName, tour: self.tour, knowledgeBase: kb, settings: self.settings.assistant, redact: self.settings.gemini.redactNumbers)
             let text = try await self.gemini.generate(system: p.system, prompt: p.prompt, json: true, temperature: 0.3)
             guard let d = Assistant.decode(DraftReply.self, from: text) else { throw AppError("Could not read Gemini's reply") }
             if let j = self.inbox.firstIndex(where: { $0.id == itemId }) {
                 self.inbox[j].draft = d
-                self.inbox[j].draftBody = d.body
+                self.inbox[j].draftBody = self.ensureSignOff(d.body, to: sender)
             }
         }
     }
 
     /// Creates the proposed Lead or Contact (+Account) after re-checking that it doesn't exist.
+    /// Archives a mail that needs no action: removed from the Gmail inbox and from the list — nothing is logged or sent.
+    func archiveMail(_ itemId: String) {
+        guard let i = inbox.firstIndex(where: { $0.id == itemId }) else { return }
+        let next = inbox.indices.contains(i + 1) ? inbox[i + 1].id : (i > 0 ? inbox[i - 1].id : nil)
+        run("Archiving…") {
+            try await self.google.archive(itemId)
+            self.inbox.removeAll { $0.id == itemId }
+            if self.inboxSelection == itemId { self.inboxSelection = next }
+            self.flash("Archived")
+        }
+    }
+
     /// "Add sender to Salesforce": prepares the review card for an unknown sender (nothing is written yet).
     func proposeRecord(_ itemId: String) {
         guard let item = inbox.first(where: { $0.id == itemId }) else { return }
-        run("Checking Salesforce for this sender…") {
+        run("Checking the database for this sender…") {
             var p = Assistant.manualProposal(item.message, triage: item.triage)
             if let existing = try await self.salesforce.findPeople(email: p.email).first {
                 self.senderCache[p.email] = [existing]
-                throw AppError("\(existing.name) already exists in Salesforce as \(existing.kind.displayName).")
+                throw AppError("\(existing.name) already exists in the database as \(existing.kind.displayName).")
             }
             p.possibleDuplicates = (try? await self.salesforce.findPeople(firstName: p.firstName, lastName: p.lastName)) ?? []
             let domain = p.email.split(separator: "@").last.map(String.init)
@@ -898,7 +927,7 @@ final class AppState {
         guard let i = inbox.firstIndex(where: { $0.id == itemId }) else { return }
         let m = inbox[i].message
         reviewingProposal = nil
-        run("Creating \(p.kind.displayName) in Salesforce…") {
+        run("Creating \(p.kind.displayName)…") {
             // Duplicate check right before writing.
             if let existing = try await self.salesforce.findPeople(email: p.email).first {
                 self.senderCache[p.email] = [existing]
@@ -978,7 +1007,7 @@ final class AppState {
 
     func sendThankYou(host: Host, contact: HostContact, subject: String, body: String) {
         run("Sending thank-you to \(contact.name)…") {
-            let full = body + "\n\n" + self.settings.assistant.signature
+            let full = self.ensureSignOff(body, to: .official)   // thank-you mails go to officials
             let how = try await self.sendViaGmail(to: contact.email, subject: subject, body: full,
                                                   whoId: contact.id, whatId: host.accountId)
             self.flash(how)
@@ -999,7 +1028,7 @@ final class AppState {
     func prepareHostList(_ visit: HostVisit) {
         run("Preparing attendee list for \(visit.organization)…") {
             guard let file = try await self.salesforce.spreadsheets(on: visit.id).first else {
-                throw AppError("No Excel form attached to the Opportunity “\(visit.name)”. Attach the host's template in Salesforce first.")
+                throw AppError("No Excel form attached to the host visit “\(visit.name)”. Attach the host's template to the host visit in the database first.")
             }
             let template = try XLSXTemplate(data: try await self.salesforce.download(versionId: file.id))
             let preview = try template.preview()
@@ -1027,7 +1056,7 @@ final class AppState {
 
             Please do not hesitate to contact us if you need any further information.
 
-            \(self.settings.assistant.signature)
+            \(Assistant.signOff(self.signOffFullName))
             """
             try self.refill(&d)
             self.hostListDrafts[visit.id] = d
@@ -1082,20 +1111,19 @@ final class AppState {
 
     // MARK: Data protection scrub
 
-    func scrubSalesforce(fields: [ParticipantField]) {
-        run("Deleting passport data in Salesforce…") {
-            let leads = try await self.salesforce.leads(campaignId: self.tour.campaignId)
-            var updates: [String: [ParticipantField: String?]] = [:]
-            for l in leads where fields.contains(where: { !l[$0].isEmpty }) {
-                updates[l.id] = Dictionary(uniqueKeysWithValues: fields.map { ($0, nil) })
-            }
+    /// Clears the fixed set of personal-data fields on ALL members of the program, whatever their attendance status.
+    func scrubSalesforce() {
+        let fields = ParticipantField.defaultScrub
+        run("Deleting passport data…") {
+            let ids = try await self.salesforce.programLeadIdsWithData(campaignId: self.tour.campaignId, in: fields)
+            let updates = Dictionary(uniqueKeysWithValues: ids.map { ($0, Dictionary(uniqueKeysWithValues: fields.map { ($0, Optional<String>.none) })) })
             let results = try await self.salesforce.updateLeads(updates)
             let ok = results.filter(\.success).count
             // Data-protection record on each affected member (Lead)
             try await self.salesforce.createTasks(results.filter(\.success).map {
                 SalesforceClient.dataProtectionTask(leadId: $0.id, fields: fields, scope: "Program \(self.tour.campaignName)")
             })
-            self.tour.scrubLog.append(ScrubLogEntry(date: Date(), action: "Salesforce fields cleared",
+            self.tour.scrubLog.append(ScrubLogEntry(date: Date(), action: "Database fields cleared",
                 detail: fields.map(\.label).joined(separator: ", ") + (results.count > ok ? " — \(results.count - ok) failed" : ""), count: ok))
             for i in self.participants.indices { for f in fields { self.participants[i].values[f] = nil } }
             self.flash("Cleared on \(ok) members")
@@ -1103,9 +1131,10 @@ final class AppState {
     }
 
     /// Admin only: clears passport fields on every (unconverted) Lead in the org.
-    func scrubOrgWide(fields: [ParticipantField]) {
-        run("Deleting passport data across Salesforce…") {
-            guard try await self.salesforce.hasModifyAllData() else { throw AppError("Only Salesforce administrators (Modify All Data) can run the org-wide deletion.") }
+    func scrubOrgWide() {
+        let fields = ParticipantField.defaultScrub
+        run("Deleting passport data for all members…") {
+            guard try await self.salesforce.hasModifyAllData() else { throw AppError("Only database administrators (Modify All Data) can run the deletion for all members.") }
             let ids = try await self.salesforce.leadIdsWithData(in: fields)
             let updates = Dictionary(uniqueKeysWithValues: ids.map { ($0, Dictionary(uniqueKeysWithValues: fields.map { ($0, Optional<String>.none) })) })
             let results = try await self.salesforce.updateLeads(updates)
@@ -1114,7 +1143,7 @@ final class AppState {
                 SalesforceClient.dataProtectionTask(leadId: $0.id, fields: fields, scope: "Org-wide deletion by an administrator")
             })
             let converted = try await self.salesforce.convertedLeadCountWithData(in: fields)
-            self.tour.scrubLog.append(ScrubLogEntry(date: Date(), action: "ORG-WIDE: Salesforce fields cleared on all members",
+            self.tour.scrubLog.append(ScrubLogEntry(date: Date(), action: "ALL MEMBERS: database fields cleared",
                 detail: fields.map(\.label).joined(separator: ", ")
                     + (results.count > ok ? " — \(results.count - ok) failed" : "")
                     + (converted > 0 ? " — \(converted) converted members are read-only and were skipped" : ""), count: ok))

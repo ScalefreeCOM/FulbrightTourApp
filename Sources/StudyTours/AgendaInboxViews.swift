@@ -13,7 +13,7 @@ struct AgendaView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 FulbrightHeader(title: "Agenda & Calendar",
-                                subtitle: "One agenda → Salesforce Events · Google Calendar (team invites) · agenda Google Doc",
+                                subtitle: "One agenda → database events · Google Calendar (team invites) · agenda Google Doc",
                                 systemImage: "calendar")
                 Card {
                     HStack {
@@ -166,9 +166,12 @@ struct InboxView: View {
                         }
                     }
                     .tag(item.id)
+                    .contextMenu {
+                        Button { state.archiveMail(item.id) } label: { Label("Archive (no action needed)", systemImage: "archivebox") }
+                    }
                 }
                 .scrollContentBackground(.hidden)
-                if !state.googleConnected { Text("Connect Google in Settings to scan the Fulbright mailbox.").font(.caption).padding() }
+                if !state.googleConnected { Text("Connect your Google account in Settings to scan your inbox.").font(.caption).padding() }
             }
             .frame(minWidth: 260, idealWidth: 330)
             .glassPanel(cornerRadius: 22)
@@ -208,14 +211,18 @@ struct MessageDetail: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
                         if item.identity.record?.vip == true { VIPBadge(withLabel: true) }
                         Text(item.message.subject).font(.title3.bold())
+                        Spacer()
+                        Button { state.archiveMail(itemId) } label: { Label("Archive", systemImage: "archivebox") }
+                            .help("No action needed: archive in Gmail and remove from the list (nothing is logged)")
+                            .keyboardShortcut("e", modifiers: .command)
                     }
                     Text("\(item.message.from) · \(item.message.date.formatted())").font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                     HStack {
                         Text("Sender: \(item.identity.kind.rawValue) (\(item.identity.source))").font(.caption)
-                        if let r = item.identity.record, let u = state.salesforce.recordURL(r.id) { Link("Open in Salesforce", destination: u).font(.caption) }
+                        if let r = item.identity.record, let u = state.salesforce.recordURL(r.id) { Link("Open in the database", destination: u).font(.caption) }
                     }
                 }
                 if let t = item.triage {
@@ -231,7 +238,7 @@ struct MessageDetail: View {
                 }
                 if let p = item.proposal {
                     HStack {
-                        Label("Not in Salesforce — suggested: new \(p.kind == .lead ? "member" : "contact") \(p.firstName) \(p.lastName)\(p.vip ? " (VIP)" : "")",
+                        Label("Not in the database — suggested: new \(p.kind == .lead ? "member" : "contact") \(p.firstName) \(p.lastName)\(p.vip ? " (VIP)" : "")",
                               systemImage: "person.crop.circle.badge.plus")
                         Spacer()
                         Button("Review…") { state.reviewingProposal = itemId }
@@ -241,9 +248,9 @@ struct MessageDetail: View {
                 }
                 else if item.identity.kind == .unknown {
                     HStack {
-                        Label("This sender is not in Salesforce.", systemImage: "person.crop.circle.badge.questionmark")
+                        Label("This sender is not in the database.", systemImage: "person.crop.circle.badge.questionmark")
                         Spacer()
-                        Button("Add sender to Salesforce…") { state.proposeRecord(itemId) }
+                        Button("Add sender to the database…") { state.proposeRecord(itemId) }
                             .disabled(!state.salesforceConnected)
                             .help("Review name, organization and record type before anything is created")
                     }
@@ -319,11 +326,11 @@ struct CCRow: View {
             TextField("add address", text: $typed).textFieldStyle(.roundedBorder).font(.caption).frame(width: 150)
                 .onSubmit { add(typed) }
             Menu {
-                if candidates.isEmpty { Text(state.users.isEmpty ? "Salesforce users not loaded" : "Everyone is already in CC") }
+                if candidates.isEmpty { Text(state.users.isEmpty ? "Team members not loaded" : "Everyone is already in CC") }
                 ForEach(candidates, id: \.id) { u in Button("\(u.name) <\(u.email)>") { add(u.email) } }
             } label: { Label("Add CC", systemImage: "person.badge.plus") }
             .menuStyle(.borderlessButton).fixedSize()
-            .help("Add a Salesforce user (team member) in CC")
+            .help("Add a team member in CC")
         }
     }
 
@@ -387,7 +394,7 @@ struct ReplyPanel: View {
                             .font(.body).frame(height: 170)
                             .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.quaternary))
                         if item.identity.record == nil {
-                            Text("Add the sender to Salesforce first, so the email is logged.").font(.caption).foregroundStyle(.secondary)
+                            Text("Add the sender to the database first, so the email is logged.").font(.caption).foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         } else if item.draftBody.contains("[CHECK") {
                             Text("Replace the [CHECK …] parts before sending.").font(.caption).foregroundStyle(.orange)
@@ -420,8 +427,8 @@ struct ProposalSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Add to Salesforce").font(.title2.bold())
-            Text("\(proposal.email) is not in Salesforce yet. Check the details, then create the record.")
+            Text("Add to the database").font(.title2.bold())
+            Text("\(proposal.email) is not in the database yet. Check the details, then create the record.")
                 .foregroundStyle(.secondary)
             Picker("Type", selection: $proposal.kind) {
                 Text("Member — attendee").tag(RecordProposal.Kind.lead)
@@ -454,7 +461,7 @@ struct ProposalSheet: View {
                     }
                 }
             }
-            Text("Right before creating, the app checks Salesforce again by email, so no duplicates are written.")
+            Text("Right before creating, the app checks the database again by email, so no duplicates are written.")
                 .font(.caption).foregroundStyle(.secondary)
             HStack {
                 Button("Don't add") {
@@ -464,7 +471,7 @@ struct ProposalSheet: View {
                 .help("Discard this suggestion")
                 Spacer()
                 Button("Cancel", role: .cancel) { state.reviewingProposal = nil }.keyboardShortcut(.cancelAction)
-                Button("Create in Salesforce") { state.createRecord(itemId, proposal: proposal) }
+                Button("Create") { state.createRecord(itemId, proposal: proposal) }
                     .buttonStyle(.borderedProminent).tint(Theme.fbBlue).keyboardShortcut(.defaultAction)
                     .disabled(proposal.lastName.trimmingCharacters(in: .whitespaces).isEmpty)
             }
@@ -483,7 +490,7 @@ struct VIPBadge: View {
             if withLabel { Text("VIP").font(.caption.bold()) }
         }
         .foregroundStyle(Color(red: 0.95, green: 0.75, blue: 0.2))
-        .help("VIP in Salesforce — official role or the person visited")
+        .help("VIP — official role or the person visited")
         .accessibilityLabel("VIP")
     }
 }

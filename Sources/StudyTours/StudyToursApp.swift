@@ -165,11 +165,10 @@ struct ProgramSelector: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("SALESFORCE PROGRAM").font(.caption2.bold()).kerning(1).opacity(0.6).padding(.horizontal, 4)
             if !state.salesforceConnected {
                 Text(state.tourTitle).font(.callout).padding(.horizontal, 4)
                 Button { state.selection = .settings } label: {
-                    Label("Connect Salesforce…", systemImage: "link").frame(maxWidth: .infinity)
+                    Label("Connect the database…", systemImage: "link").frame(maxWidth: .infinity)
                 }
                 .glassButton()
             } else {
@@ -186,21 +185,21 @@ struct ProgramSelector: View {
                     }
                     .labelsHidden()
                     Button { state.loadPrograms() } label: { Image(systemName: "arrow.clockwise") }
-                        .buttonStyle(.plain).help("Reload programs from Salesforce")
+                        .buttonStyle(.plain).help("Reload programs")
                     if !state.tour.campaignId.isEmpty, let u = state.salesforce.recordURL(state.tour.campaignId) {
-                        Link(destination: u) { Image(systemName: "arrow.up.right.square") }.help("Open program in Salesforce")
+                        Link(destination: u) { Image(systemName: "arrow.up.right.square") }.help("Open program in the database")
                     }
                 }
                 HStack {
                     Image(systemName: state.storageMissingFields.isEmpty ? "icloud.and.arrow.up" : "exclamationmark.icloud")
-                    Text(state.storageMissingFields.isEmpty ? state.syncStatus : "Salesforce fields not deployed yet")
+                    Text(state.storageMissingFields.isEmpty ? state.syncStatus : "Database fields not deployed yet")
                         .lineLimit(1)
                     Spacer()
                     Button("New…") { state.showNewProgram = true }.buttonStyle(.plain).font(.caption.bold())
-                        .help("Create a new study tour (program) in Salesforce")
+                        .help("Create a new study tour (program)")
                 }
                 .font(.caption2).opacity(0.8).padding(.horizontal, 4)
-                .help(state.storageMissingFields.isEmpty ? "Tour data lives in Salesforce (program, Tasks, Opportunities) and is shared with the team"
+                .help(state.storageMissingFields.isEmpty ? "Tour data lives in the database (program, checklist, host visits) and is shared with the team"
                       : "Deploy the metadata package: " + state.storageMissingFields.joined(separator: ", "))
             }
         }
@@ -275,28 +274,37 @@ struct MonitoringPanel: View {
                 Metric(icon: "calendar.badge.clock", label: days > 0 ? "Days until tour" : days == 0 ? "Tour starts today" : "Days since start",
                        value: "\(abs(days))", tint: Theme.fbCyan)
 
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible())], spacing: 10) {
+                // tiles with nothing to report (0, or not loaded yet) are hidden
+                let tiles: [Metric] = [
                     Metric(icon: "envelope.badge", label: "Unread mails", value: state.unreadCount.map(String.init) ?? "–",
-                           tint: Theme.fbMid) { state.selection = .inbox }
+                           tint: Theme.fbMid) { state.selection = .inbox },
                     Metric(icon: "exclamationmark.bubble", label: "Important", value: "\(important)",
-                           tint: important > 0 ? Theme.usRed : Theme.fbMid) { state.selection = .inbox }
+                           tint: important > 0 ? Theme.usRed : Theme.fbMid) { state.selection = .inbox },
                     Metric(icon: "person.3", label: "Attendees", value: state.memberCount.map(String.init) ?? (state.participants.isEmpty ? "–" : "\(state.participants.count)"),
-                           tint: Theme.fbMid) { state.selection = .phase(.registration) }
-                    Metric(icon: "building.columns", label: "Hosts confirmed", value: "\(confirmed)/\(tour.hosts.count)",
-                           tint: Theme.fbMid) { state.selection = .phase(.outreach) }
+                           tint: Theme.fbMid) { state.selection = .phase(.registration) },
+                    Metric(icon: "building.columns", label: "Hosts confirmed", value: tour.hosts.isEmpty ? "0" : "\(confirmed)/\(tour.hosts.count)",
+                           tint: Theme.fbMid) { state.selection = .phase(.outreach) },
                     Metric(icon: "xmark.octagon", label: "Data errors", value: errors.map(String.init) ?? "–",
-                           tint: (errors ?? 0) > 0 ? Theme.usRed : Theme.fbMid) { state.selection = .phase(.registration) }
+                           tint: (errors ?? 0) > 0 ? Theme.usRed : Theme.fbMid) { state.selection = .phase(.registration) },
+                    Metric(icon: "person.crop.rectangle.badge.xmark", label: "Passport incomplete",
+                           value: state.incompletePassports.map(String.init) ?? "–",
+                           tint: (state.incompletePassports ?? 0) > 0 ? Theme.usRed : Theme.fbMid) { state.selection = .phase(.registration) },
                     Metric(icon: "person.text.rectangle", label: "Passport issues", value: passportIssues.map(String.init) ?? "–",
-                           tint: (passportIssues ?? 0) > 0 ? .orange : Theme.fbMid) { state.selection = .phase(.registration) }
+                           tint: (passportIssues ?? 0) > 0 ? .orange : Theme.fbMid) { state.selection = .phase(.registration) },
                     Metric(icon: "checklist", label: "Overdue tasks", value: "\(overdue)",
-                           tint: overdue > 0 ? Theme.usRed : Theme.fbMid)
+                           tint: overdue > 0 ? Theme.usRed : Theme.fbMid),
                     Metric(icon: "person.badge.plus", label: "New contacts", value: "\(proposals)",
-                           tint: proposals > 0 ? .orange : Theme.fbMid) { state.selection = .inbox }
+                           tint: proposals > 0 ? .orange : Theme.fbMid) { state.selection = .inbox },
                     Metric(icon: "building.columns.fill", label: "Officials' mails", value: "\(officials.count)",
-                           tint: officials.isEmpty ? Theme.fbMid : Theme.usRed)
+                           tint: officials.isEmpty ? Theme.fbMid : Theme.usRed),
                     Metric(icon: "square.and.pencil", label: "Drafts to review", value: "\(drafts)",
-                           tint: drafts > 0 ? .orange : Theme.fbMid) { state.selection = .inbox }
-                    Metric(icon: "calendar", label: "Agenda items", value: "\(tour.agenda.count)", tint: Theme.fbMid) { state.selection = .agenda }
+                           tint: drafts > 0 ? .orange : Theme.fbMid) { state.selection = .inbox },
+                    Metric(icon: "calendar", label: "Agenda items", value: "\(tour.agenda.count)", tint: Theme.fbMid) { state.selection = .agenda },
+                ].filter { $0.value != "0" && $0.value != "–" }
+                if !tiles.isEmpty {
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible())], spacing: 10) {
+                        ForEach(tiles, id: \.label) { $0 }
+                    }
                 }
 
                 if !officials.isEmpty {
@@ -332,15 +340,6 @@ struct MonitoringPanel: View {
                     .insetPanel(cornerRadius: 14)
                 }
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Connections").font(.caption).opacity(0.75)
-                    ConnectionDot(name: "Salesforce", on: state.salesforceConnected)
-                    ConnectionDot(name: "Google", on: state.googleConnected)
-                    ConnectionDot(name: "Gemini", on: state.gemini.isConfigured)
-                    if let s = state.lastScan { Text("Inbox scanned \(s.formatted(date: .omitted, time: .shortened))").font(.caption2).opacity(0.6) }
-                }
-                .padding(12).frame(maxWidth: .infinity, alignment: .leading)
-                .insetPanel(cornerRadius: 14)
             }
             .padding(14)
         }
@@ -377,16 +376,22 @@ struct Metric: View {
     }
 }
 
+/// Compact connection status for the footer: dot + name, details on hover; click opens Settings.
 struct ConnectionDot: View {
+    @Environment(AppState.self) private var state
     let name: String
     let on: Bool
+    var detail: String? = nil
     var body: some View {
-        HStack(spacing: 6) {
-            Circle().fill(on ? Color.green : Color.gray).frame(width: 7, height: 7)
-            Text(name).font(.caption)
-            Spacer()
-            Text(on ? "connected" : "not set up").font(.caption2).opacity(0.6)
+        Button { state.selection = .settings } label: {
+            HStack(spacing: 5) {
+                Circle().fill(on ? Color.green : Color.gray).frame(width: 7, height: 7)
+                Text(name).font(.caption)
+            }
+            .foregroundStyle(.white.opacity(on ? 0.9 : 0.6))
         }
+        .buttonStyle(.plain)
+        .help("\(name): \(on ? "connected" : "not set up — click to open Settings")\(detail.map { " · " + $0 } ?? "")")
     }
 }
 
@@ -396,6 +401,15 @@ struct PartnerFooter: View {
     @Environment(AppState.self) private var state
     var body: some View {
         HStack(spacing: 14) {
+            // connection status
+            HStack(spacing: 10) {
+                ConnectionDot(name: "Salesforce", on: state.salesforceConnected)
+                ConnectionDot(name: "Google", on: state.googleConnected,
+                              detail: state.lastScan.map { "inbox scanned \($0.formatted(date: .omitted, time: .shortened))" })
+                ConnectionDot(name: "Gemini", on: state.geminiConfigured)
+            }
+            .padding(.trailing, 6)
+            Divider().frame(height: 22).overlay(.white.opacity(0.3))
             Text("A cooperation of").font(.caption).foregroundStyle(.white.opacity(0.8))
             ForEach(Partner.allCases) { p in
                 PartnerLogo(partner: p, height: 30)
@@ -430,7 +444,7 @@ struct PartnerFooter: View {
                     Text("Scalefree").font(.caption.bold()).foregroundStyle(.white)
                 }
             }
-            .help("Fulbright Study Tours app and Salesforce backend by Scalefree")
+            .help("Fulbright Study Tours app and database backend by Scalefree")
         }
         .padding(.horizontal, 14).padding(.vertical, 8)
         .glassPanel(cornerRadius: 18)
@@ -492,19 +506,19 @@ struct NewProgramSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("New study tour").font(.title2.bold())
-            Text("Creates a program (Campaign) in Salesforce. The whole team sees it in the program list.")
+            Text("Creates a program in the database. The whole team sees it in the program list.")
                 .font(.callout).foregroundStyle(.secondary)
             Form {
                 TextField("City / region", text: $city)
                 DatePicker("Start", selection: $start, displayedComponents: .date)
                 DatePicker("End", selection: $end, in: start..., displayedComponents: .date)
                 TextField("Program name", text: Binding(get: { nameEdited ? name : suggested }, set: { name = $0; nameEdited = true }))
-                Text("The program name is the tour's title in the app and in Salesforce.").font(.caption).foregroundStyle(.secondary)
+                Text("The program name is the tour's title everywhere.").font(.caption).foregroundStyle(.secondary)
             }
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("Create in Salesforce") { state.createProgramTour(name: finalName, start: start, end: end, city: city); dismiss() }
+                Button("Create program") { state.createProgramTour(name: finalName, start: start, end: end, city: city); dismiss() }
                     .keyboardShortcut(.defaultAction).disabled(finalName.trimmingCharacters(in: .whitespaces).isEmpty || city.isEmpty)
             }
         }

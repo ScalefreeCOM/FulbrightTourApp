@@ -86,10 +86,10 @@ public enum Assistant {
     public static func identify(address: String, tour: Tour, salesforceMatches: [SFRecordRef]) -> SenderIdentity {
         let a = address.lowercased()
         if salesforceMatches.contains(where: { $0.kind == .user }) {
-            return SenderIdentity(kind: .team, record: nil, source: "Salesforce user (organiser)")
+            return SenderIdentity(kind: .team, record: nil, source: "team member")
         }
         if let c = salesforceMatches.first(where: { $0.kind == .contact }) {
-            return SenderIdentity(kind: .official, record: c, source: "Salesforce Contact")
+            return SenderIdentity(kind: .official, record: c, source: "contact in the database")
         }
         if tour.hosts.contains(where: { h in h.contacts.contains { $0.email.lowercased() == a } }) {
             return SenderIdentity(kind: .official, record: nil, source: "Host contact")
@@ -99,9 +99,9 @@ public enum Assistant {
             return SenderIdentity(kind: .official, record: nil, source: "Host email domain")
         }
         if let l = salesforceMatches.first(where: { $0.kind == .lead }) {
-            return SenderIdentity(kind: .attendee, record: l, source: "Salesforce member")
+            return SenderIdentity(kind: .attendee, record: l, source: "member in the database")
         }
-        return SenderIdentity(kind: .unknown, record: nil, source: "Not in Salesforce")
+        return SenderIdentity(kind: .unknown, record: nil, source: "not in the database")
     }
 
     public static func hasUrgentKeyword(_ m: MailMessage, keywords: [String]) -> Bool {
@@ -133,7 +133,7 @@ public enum Assistant {
 
     public static func triagePrompt(_ m: MailMessage, identity: SenderIdentity, tour: Tour, knowledgeBase: String = "", redact doRedact: Bool) -> (system: String, prompt: String) {
         let system = """
-        You triage the shared mailbox of a volunteer team that organises Fulbright study tours.
+        You triage the mailbox of a member of the volunteer team that organises Fulbright study tours.
         Senders are either attendees/participants of a study tour, officials of institutions the tour visits \
         (or their assistants), team members, or unrelated (newsletters, spam, other topics).
         Respond ONLY with JSON matching:
@@ -171,8 +171,46 @@ public enum Assistant {
         return (EmailRules.addresses(from: m.to) + EmailRules.addresses(from: m.cc)).filter { seen.insert($0).inserted }
     }
 
-    public static func replyPrompt(_ m: MailMessage, sender: SenderKind = .attendee, greeting: String? = nil, tour: Tour,
-                                   knowledgeBase: String = "", settings: AssistantSettings, redact doRedact: Bool) -> (system: String, prompt: String) {
+    /// Sign-off under a draft: "Best regards," and the first name of the Salesforce user who writes.
+    public static func signOff(_ name: String) -> String { "Best regards,\n\(name)" }
+
+    /// First name for the sign-off ("Michael Olschimke" → "Michael"); the team if the user is unknown.
+    public static func signOffName(userName: String?) -> String {
+        let first = (userName ?? "").split(separator: " ").first.map(String.init) ?? ""
+        return first.isEmpty ? "The Fulbright Study Tour Team" : first
+    }
+
+    /// Full name for the sign-off to officials; the team if the user is unknown.
+    public static func signOffFullName(userName: String?) -> String {
+        let n = (userName ?? "").trimmingCharacters(in: .whitespaces)
+        return n.isEmpty ? "The Fulbright Study Tour Team" : n
+    }
+
+    /// Makes sure a draft ends with a closing and the writer's name (Gemini sometimes leaves it out).
+    /// `accept` lists other names that also count as signed (e.g. the first name for an official on first-name terms).
+    public static func ensureSignOff(_ body: String, name: String, accept: [String] = []) -> String {
+        let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        let tail = trimmed.split(separator: "\n").suffix(3).map { $0.trimmingCharacters(in: .whitespaces) }
+        return tail.contains { ([name] + accept).contains($0) } ? trimmed : trimmed + "\n\n" + signOff(name)
+    }
+
+    /// Members are signed with the first name; officials with the full name unless the thread shows first-name terms.
+    public static func replyPrompt(_ m: MailMessage, sender: SenderKind = .attendee, greeting: String? = nil,
+                                   signOffName: String = "", signOffFullName: String = "",
+                                   tour: Tour, knowledgeBase: String = "", settings: AssistantSettings, redact doRedact: Bool) -> (system: String, prompt: String) {
+        let closing = "End the body with a closing in the language of the email (e.g. \"Best regards,\" or \"Viele Grüße,\")"
+        let closingRule: String
+        if signOffName.isEmpty {
+            closingRule = "End the body with a closing such as \"Best regards,\"."
+        } else if sender == .official, !signOffFullName.isEmpty, signOffFullName != signOffName {
+            closingRule = """
+            \(closing) and the full name "\(signOffFullName)" on the next line. Only if the earlier messages in this thread \
+            show that the official and the writer are on first-name terms (the official addresses them by first name, or \
+            earlier replies were signed "\(signOffName)"), sign with "\(signOffName)" instead.
+            """
+        } else {
+            closingRule = "\(closing) and the name \"\(signOffName)\" on the next line."
+        }
         let greetingRule = greeting.map { $0.trimmingCharacters(in: .whitespaces) }.flatMap { $0.isEmpty ? nil : $0 }
             .map { "Start the body with exactly this greeting line: \"\($0)\"" }
             ?? "Start the body with a greeting line that fits the sender and the language, e.g. \"Dear Jane,\" or \"Dear Ms. Doe,\"."
@@ -194,10 +232,13 @@ public enum Assistant {
         and put a placeholder like [CHECK: what is missing] in the body.
         Never ask anyone to send passport numbers or other ID data by email.
         \(greetingRule)
-        Do not include a signature; it is appended automatically.
+        \(closingRule) Do not add anything after the name.
         Respond ONLY with JSON: {"subject": string, "body": string, "confident": bool, "missingInfo": [string]}
         """
-        let body = String(MailBody.stripQuoted(m.body).prefix(6000))
+        let parts = MailBody.split(m.body)
+        let body = String(parts.new.prefix(6000))
+        // for officials the earlier thread shows how formal the relationship is (greeting and sign-off)
+        let history = sender == .official ? String(parts.quoted.prefix(4000)) : ""
         let prompt = """
         TOUR CONTEXT:
         \(tourContext(tour, knowledgeBase: knowledgeBase))
@@ -207,6 +248,7 @@ public enum Assistant {
         Subject: \(m.subject)
 
         \(doRedact ? redact(body) : body)
+        \(history.isEmpty ? "" : "\n--- EARLIER MESSAGES IN THIS THREAD ---\n" + (doRedact ? redact(history) : history))
         """
         return (system, prompt)
     }
@@ -228,19 +270,23 @@ public enum Assistant {
         return lower.hasPrefix("re:") || lower.hasPrefix("aw:") ? original : "Re: \(original)"
     }
 
-    /// Fixed line under every outgoing mail (not a setting).
-    public static let sentVia = "Sent via https://scalefr.ee/fulbrightapp"
+    /// Fixed line directly below the writer's name on every outgoing mail (not a setting).
+    public static let sentVia = "via https://scalefr.ee/fulbrightapp"
 
-    /// Appends the "Sent via" line once (mails composed by `composeBody` already contain it).
-    public static func withSentVia(_ body: String) -> String {
-        body.contains(sentVia) ? body : body.trimmingCharacters(in: .whitespacesAndNewlines) + "\n\n" + sentVia
+    /// Footer of every outgoing mail: the "via" line right under the name, then the user's Gmail signature.
+    /// Applied once — a body that already contains the "via" line is returned unchanged.
+    public static func withFooter(_ body: String, signature: String = "") -> String {
+        if body.contains(sentVia) { return body }
+        let sig = signature.trimmingCharacters(in: .whitespacesAndNewlines)
+        return body.trimmingCharacters(in: .whitespacesAndNewlines) + "\n" + sentVia + (sig.isEmpty ? "" : "\n\n" + sig)
     }
 
-    public static func composeBody(_ reply: String, signature: String, original: MailMessage) -> String {
+    /// The reply as sent: the draft (ending with the sign-off), the footer and the quoted original.
+    public static func composeBody(_ reply: String, signature: String = "", original: MailMessage) -> String {
         let df = DateFormatter(); df.dateStyle = .medium; df.timeStyle = .short
         let quoted = MailBody.stripQuoted(original.body).split(separator: "\n", omittingEmptySubsequences: false)
             .prefix(40).map { "> " + $0 }.joined(separator: "\n")
-        return "\(reply.trimmingCharacters(in: .whitespacesAndNewlines))\n\n\(signature)\n\n\(sentVia)\n\nOn \(df.string(from: original.date)), \(original.fromName) wrote:\n\(quoted)"
+        return withFooter(reply, signature: signature) + "\n\nOn \(df.string(from: original.date)), \(original.fromName) wrote:\n\(quoted)"
     }
 
     // MARK: Record proposals (new Leads / Contacts)

@@ -162,8 +162,33 @@ public final class SalesforceClient: @unchecked Sendable {
         return obj["totalSize"] as? Int ?? 0
     }
 
+    /// Attendees = members of the program whose Attendance Status is "Attending" (Invited/Applied/Cancelled excluded).
+    /// The one definition used for the attendee count, the member list, data checks and host lists.
+    static func attendingMembers(_ campaignId: String) -> String {
+        "SELECT LeadId FROM CampaignMember WHERE CampaignId = '\(esc(campaignId))' AND LeadId != null AND \(F.attendance) = '\(F.attending)'"
+    }
+
+    /// Number of attendees (see `attendingMembers`).
     public func memberCount(campaignId: String) async throws -> Int {
-        try await count("SELECT COUNT() FROM CampaignMember WHERE CampaignId = '\(Self.esc(campaignId))' AND LeadId != null")
+        try await count("SELECT COUNT() FROM Lead WHERE IsConverted = false AND Id IN (\(Self.attendingMembers(campaignId)))")
+    }
+
+    /// Attendees with at least one empty identity-document field (birth date, citizenship, ID type, number, expiry, issuing country).
+    public func incompletePassportCount(campaignId: String) async throws -> Int {
+        let available = try await fieldNames(of: "Lead")
+        let fields = ParticipantField.allCases.filter(\.isPassportData).map { settings.field($0) }.filter(available.contains)
+        guard !fields.isEmpty, !campaignId.isEmpty else { return 0 }
+        let anyEmpty = fields.map { "\($0) = null" }.joined(separator: " OR ")
+        return try await count("SELECT COUNT() FROM Lead WHERE IsConverted = false AND (\(anyEmpty)) AND Id IN (\(Self.attendingMembers(campaignId)))")
+    }
+
+    /// All members of the program with data in these fields — whatever their attendance status (for the deletion).
+    public func programLeadIdsWithData(campaignId: String, in fields: [ParticipantField]) async throws -> [String] {
+        guard !fields.isEmpty, !campaignId.isEmpty else { return [] }
+        return try await query("""
+            SELECT Id FROM Lead WHERE IsConverted = false AND \(anyFilled(fields)) \
+            AND Id IN (SELECT LeadId FROM CampaignMember WHERE CampaignId = '\(Self.esc(campaignId))' AND LeadId != null)
+            """).compactMap { $0["Id"] as? String }
     }
 
     public static func esc(_ s: String) -> String {
@@ -225,7 +250,7 @@ public final class SalesforceClient: @unchecked Sendable {
         let available = try await fieldNames(of: "Campaign")
         let optional = [F.city, F.folder, F.agenda].filter(available.contains)
         let rows = try await query("SELECT \((["Id", "Name", "StartDate", "EndDate"] + optional).joined(separator: ", ")) FROM Campaign WHERE Id = '\(Self.esc(id))' LIMIT 1")
-        guard let r = rows.first else { throw AppError("Program \(id) not found in Salesforce") }
+        guard let r = rows.first else { throw AppError("Program \(id) not found in the database") }
         func v(_ k: String) -> String? { (r[k] as? String).flatMap { $0.isEmpty ? nil : $0 } }
         return ProgramRecord(id: id, name: r["Name"] as? String ?? "",
                              startDate: v("StartDate").flatMap(Self.dayFormatter.date(from:)),
@@ -382,8 +407,7 @@ public final class SalesforceClient: @unchecked Sendable {
         let select = (["Id"] + mapped.map { settings.field($0) }).joined(separator: ", ")
         var whereClause = "IsConverted = false"
         if !campaignId.isEmpty {
-            // Participants = program members with Attendance Status "Attending" (Invited/Applied/Cancelled excluded)
-            whereClause += " AND Id IN (SELECT LeadId FROM CampaignMember WHERE CampaignId = '\(Self.esc(campaignId))' AND \(F.attendance) = '\(F.attending)')"
+            whereClause += " AND Id IN (\(Self.attendingMembers(campaignId)))"
         }
         if !settings.leadFilter.trimmingCharacters(in: .whitespaces).isEmpty {
             whereClause += " AND (\(settings.leadFilter))"
@@ -574,7 +598,7 @@ public final class SalesforceClient: @unchecked Sendable {
 
     public func create(_ type: String, _ fields: [String: Any]) async throws -> String {
         let r = try await call("POST", "/sobjects/\(type)", body: fields) as? [String: Any] ?? [:]
-        guard let id = r["id"] as? String else { throw AppError("Salesforce did not return an id for new \(type)") }
+        guard let id = r["id"] as? String else { throw AppError("The database did not return an id for the new \(type)") }
         return id
     }
 

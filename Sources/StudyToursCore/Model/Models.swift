@@ -58,7 +58,7 @@ public enum PhaseID: Int, Codable, CaseIterable, Identifiable, Hashable, Sendabl
 
     public var summary: String {
         switch self {
-        case .setup: return "Create the tour, assign team roles, create the Drive folder and link the Salesforce program."
+        case .setup: return "Create the tour, assign team roles, create the Drive folder and link the program."
         case .outreach: return "Contact host institutions, track confirmations and capture which participant data each host needs."
         case .program: return "Tentative and final agenda, flyer, two marketing waves, FAQ for the email assistant."
         case .registration: return "Registrations come in as members of the tour program. Cleanse data and validate passports continuously."
@@ -411,7 +411,6 @@ public struct GeminiSettings: Codable, Hashable, Sendable {
 /// Replies are only ever drafted; the user reviews and sends every email.
 public struct AssistantSettings: Codable, Hashable, Sendable {
     public var pollMinutes: Int = 15
-    public var signature: String = "Kind regards,\nThe Fulbright Study Tour Team"
     public var tone: String = "friendly, concise, professional"
     public var urgentKeywords: [String] = ["urgent", "dringend", "deadline", "frist", "cancel", "absage",
                                            "visa", "security", "sicherheit", "passport", "reisepass", "complaint"]

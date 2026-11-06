@@ -219,13 +219,37 @@ final class AssistantTests: XCTestCase {
         XCTAssertTrue(Assistant.replyPrompt(m, tour: tour(), settings: AssistantSettings(), redact: true).system.contains("Start the body with a greeting line"))
     }
 
-    func testSentViaLineOnOutgoingMail() {
-        let reply = Assistant.composeBody("Thanks!", signature: "Kind regards", original: msg(from: "Jane Doe <jane@example.com>"))
-        // below the signature, above the quoted original — and only once
-        let sig = reply.range(of: "Kind regards")!, via = reply.range(of: Assistant.sentVia)!, quote = reply.range(of: "wrote:")!
-        XCTAssertTrue(sig.upperBound <= via.lowerBound && via.upperBound <= quote.lowerBound)
-        XCTAssertEqual(Assistant.withSentVia(reply), reply)
-        XCTAssertEqual(Assistant.withSentVia("Hello\n"), "Hello\n\n" + Assistant.sentVia)
+    func testFooterViaLineThenGmailSignature() {
+        let reply = Assistant.composeBody("Thanks!\n\nBest regards,\nMike", signature: "Michael Olschimke\nScalefree",
+                                          original: msg(from: "Jane Doe <jane@example.com>"))
+        // name, then directly the via line, a blank line, the Gmail signature, then the quoted original
+        XCTAssertTrue(reply.hasPrefix("Thanks!\n\nBest regards,\nMike\nvia https://scalefr.ee/fulbrightapp\n\nMichael Olschimke\nScalefree\n\nOn "))
+        XCTAssertEqual(Assistant.withFooter(reply, signature: "X"), reply)          // only once
+        XCTAssertEqual(Assistant.withFooter("Hello\n"), "Hello\nvia https://scalefr.ee/fulbrightapp")
+        // Gmail signatures are HTML
+        XCTAssertEqual(MailBody.stripHTML(#"<div dir="ltr">Michael Olschimke<div>CEO</div><div><a href="https://www.scalefree.com">Website</a></div></div>"#),
+                       "Michael Olschimke\nCEO\nWebsite (https://www.scalefree.com)")
+    }
+
+    func testDraftSignOffUsesSalesforceUserFirstName() {
+        XCTAssertEqual(Assistant.signOffName(userName: "Michael Olschimke"), "Michael")
+        XCTAssertEqual(Assistant.signOffName(userName: nil), "The Fulbright Study Tour Team")
+        // added when Gemini left it out, not doubled when it is there
+        XCTAssertEqual(Assistant.ensureSignOff("Dear Jane,\n\nSee you at 9.", name: "Michael"), "Dear Jane,\n\nSee you at 9.\n\nBest regards,\nMichael")
+        let signed = "Dear Jane,\n\nSee you at 9.\n\nViele Grüße,\nMichael"
+        XCTAssertEqual(Assistant.ensureSignOff(signed, name: "Michael"), signed)
+        XCTAssertTrue(Assistant.replyPrompt(msg(from: "Jane <jane@example.com>"), signOffName: "Michael", signOffFullName: "Michael Olschimke",
+                                            tour: tour(), settings: AssistantSettings(), redact: true).system.contains(#"the name "Michael" on the next line"#))
+        // officials: full name by default, first name only on first-name terms; the earlier thread is included
+        var thread = msg(from: "John Roe <john.roe@ministry.example.org>")
+        thread = MailMessage(id: "m2", threadId: "t", from: thread.from, to: thread.to, subject: "Visit", date: Date(), snippet: "",
+                             body: "Confirmed.\n\nOn Mon, Jane wrote:\n> Dear John, ... Best, Michael", labelIds: [])
+        let official = Assistant.replyPrompt(thread, sender: .official, signOffName: "Michael", signOffFullName: "Michael Olschimke",
+                                             tour: tour(), settings: AssistantSettings(), redact: true)
+        XCTAssertTrue(official.system.contains(#"the full name "Michael Olschimke""#))
+        XCTAssertTrue(official.prompt.contains("EARLIER MESSAGES IN THIS THREAD"))
+        XCTAssertEqual(Assistant.ensureSignOff("Thanks.\n\nBest,\nMichael", name: "Michael Olschimke", accept: ["Michael"]), "Thanks.\n\nBest,\nMichael")
+        XCTAssertEqual(Assistant.ensureSignOff("Thanks.", name: "Michael Olschimke", accept: ["Michael"]), "Thanks.\n\nBest regards,\nMichael Olschimke")
     }
 
     func testEmailHeaderParsing() {

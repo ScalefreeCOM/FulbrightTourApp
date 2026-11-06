@@ -153,7 +153,7 @@ public struct Cleanser: Sendable {
                 let key = p.id + why
                 guard seen.insert(key).inserted else { continue }
                 out.append(DataIssue(participantId: p.id, participantName: p.displayName, field: nil, severity: .warning,
-                                     message: "Possible duplicate (\(why)) of member \(others) — merge in Salesforce"))
+                                     message: "Possible duplicate (\(why)) of member \(others) — merge in the database"))
             }
         }
         return out

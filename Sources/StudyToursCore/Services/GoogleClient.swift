@@ -160,6 +160,18 @@ public final class GoogleClient: @unchecked Sendable {
         return r["id"] as? String ?? ""
     }
 
+    private var signatureCache: String?
+    /// The user's own Gmail signature (default send-as address), as plain text; "" if none is set.
+    public func gmailSignature() async throws -> String {
+        if let s = signatureCache { return s }
+        let r = try await call("GET", "https://gmail.googleapis.com/gmail/v1/users/me/settings/sendAs") as? [String: Any] ?? [:]
+        let all = r["sendAs"] as? [[String: Any]] ?? []
+        let main = all.first { $0["isDefault"] as? Bool == true } ?? all.first { $0["isPrimary"] as? Bool == true }
+        let s = MailBody.stripHTML(main?["signature"] as? String ?? "")
+        signatureCache = s
+        return s
+    }
+
     private var myAddressCache: String?
     /// Address of the signed-in mailbox (excluded from reply CCs).
     public func myAddress() async throws -> String {
@@ -353,11 +365,30 @@ public enum MailBody {
     public static func stripHTML(_ html: String) -> String {
         var s = html.replacingOccurrences(of: "<br\\s*/?>", with: "\n", options: [.regularExpression, .caseInsensitive])
         s = s.replacingOccurrences(of: "</p>", with: "\n\n", options: .caseInsensitive)
+        // one line per <div> block: "</div><div>" is a single line break, not an empty line
+        s = s.replacingOccurrences(of: "</div>\\s*<div[^>]*>", with: "\n", options: [.regularExpression, .caseInsensitive])
+        s = s.replacingOccurrences(of: "</?div[^>]*>", with: "\n", options: [.regularExpression, .caseInsensitive])
+        // links: keep the address when the visible text differs ("Website (https://…)")
+        if let re = try? NSRegularExpression(pattern: #"<a\s[^>]*href="([^"]+)"[^>]*>([\s\S]*?)</a>"#, options: .caseInsensitive) {
+            let ns = s as NSString
+            var out = "", last = 0
+            for m in re.matches(in: s, range: NSRange(location: 0, length: ns.length)) {
+                out += ns.substring(with: NSRange(location: last, length: m.range.location - last))
+                let url = ns.substring(with: m.range(at: 1)), text = ns.substring(with: m.range(at: 2))
+                let plain = text.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression).trimmingCharacters(in: .whitespaces)
+                let bare = url.replacingOccurrences(of: "mailto:", with: "")
+                out += plain.isEmpty || plain == url || plain == bare ? bare : "\(plain) (\(bare))"
+                last = m.range.location + m.range.length
+            }
+            s = out + ns.substring(from: last)
+        }
         s = s.replacingOccurrences(of: "<style[\\s\\S]*?</style>", with: "", options: [.regularExpression, .caseInsensitive])
         s = s.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
         for (k, v) in ["&nbsp;": " ", "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": "\"", "&#39;": "'"] {
             s = s.replacingOccurrences(of: k, with: v)
         }
+        s = s.replacingOccurrences(of: "\n[ \t]+", with: "\n", options: .regularExpression)
+        s = s.replacingOccurrences(of: "\n{3,}", with: "\n\n", options: .regularExpression)
         return s.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 

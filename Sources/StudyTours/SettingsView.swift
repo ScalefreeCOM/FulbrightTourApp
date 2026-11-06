@@ -28,7 +28,7 @@ struct SignInSheet: View {
             Text("Open the sign-in page in the browser where you are signed in with the right account. If that is not your default browser, copy the link and paste it into the other browser or profile.")
                 .fixedSize(horizontal: false, vertical: true)
             if prompt.service == "Google" {
-                Text("Use the Fulbright mailbox account. If Google says the app isn't verified, choose Advanced → Go to … (unsafe).")
+                Text("Use your own Google account. If Google says the app isn't verified, choose Advanced → Go to … (unsafe).")
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             HStack {
@@ -103,7 +103,7 @@ struct ConnectionsSettings: View {
             Section("Google (Gmail · Drive · Docs · Calendar · Chat)") {
                 MaskedField(title: "OAuth client ID (Desktop app)", text: $state.settings.google.clientId)
                 SecretField(title: "OAuth client secret", key: Keychain.Key.googleSecret)
-                Text("Sign in with the Fulbright mailbox account. Scopes: Gmail modify, Drive, Docs, Calendar events, Chat messages and spaces (read), directory (sender names in the chat).").font(.caption).foregroundStyle(.secondary)
+                Text("Sign in with your own Google account. Scopes: Gmail modify, Drive, Docs, Calendar events, Chat messages and spaces (read), directory (sender names in the chat).").font(.caption).foregroundStyle(.secondary)
                 status(state.googleConnected, "") { state.connectGoogle() } disconnect: { state.disconnectGoogle() }
             }
             Section("Team chat (Google Chat)") {
@@ -172,7 +172,8 @@ struct AssistantSettingsView: View {
                 Text("Gemini drafts a reply for every mail that needs one — from members, officials and new senders. Nothing is ever sent automatically: you review, edit and send each reply yourself.")
                     .font(.caption).foregroundStyle(.secondary)
                 TextField("Tone", text: $state.settings.assistant.tone)
-                TextField("Signature", text: $state.settings.assistant.signature, axis: .vertical).lineLimit(2...5)
+                Text("Drafts are signed with “Best regards,” and the first name of the Salesforce user who is signed in.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)

@@ -159,7 +159,7 @@ spreadsheet, personal mailboxes, chat messages and Salesforce, and it ran into t
   several languages, duplicate registrations, passports that expire before (or shortly after) the tour.
 - **Passport data is sensitive.** It must be collected, passed on only to the hosts that need it, and deleted after
   the tour — with a record that this happened.
-- **The shared mailbox fills up.** Most attendee questions are the same (meeting point, dress code, documents, costs);
+- **The mailboxes fill up.** Most attendee questions are the same (meeting point, dress code, documents, costs);
   emails from officials and their offices must never get lost among them.
 - **The team changes.** Volunteers come and go between tours, so knowledge must not live in individual heads or
   mailboxes but in a shared, auditable system.
@@ -175,7 +175,9 @@ deleting data) while the team keeps the decisions.
 ### How it works
 
 The app guides the team through seven phases. Everything the team shares is stored in **Salesforce**; email,
-documents and calendar live in **Google Workspace**; **Google Gemini** helps with emails and host forms.
+documents and calendar live in **Google Workspace**; **Google Gemini** helps with emails and host forms. Every team
+member signs in with their **own** Google account and their **own** Salesforce user; what the team shares (tour
+folders, knowledge base, chat space) is shared with each person in Google — see [Team members](#team-members).
 
 | # | Phase | What the app does |
 |---|---|---|
@@ -191,11 +193,12 @@ documents and calendar live in **Google Workspace**; **Google Gemini** helps wit
   <img src="docs/images/app-host-lists.png" alt="Attendee lists for host organizations in the app" width="90%">
 </p>
 
-**Email assistant.** The app scans the shared mailbox, recognizes who wrote (members, officials and their offices,
+**Email assistant.** The app scans your own Gmail inbox, recognizes who wrote (members, officials and their offices,
 the team), and drafts a reply for every email that needs one from the email and the knowledge base (a Google Doc) —
 formal for officials and starting with the greeting stored on the contact. Replies keep everyone who was in the
-original mail in CC, and you can add team members from the Salesforce user list. Every outgoing email ends with a short
-"Sent via https://scalefr.ee/fulbrightapp" line. **Nothing is ever sent automatically:** you review and edit each draft and click Send; the
+original mail in CC, and you can add team members from the Salesforce user list. Drafts are signed with your name (first name for
+members, full name for officials unless you are already on first-name terms), followed by your own Gmail
+signature. **Nothing is ever sent automatically:** you review and edit each draft and click Send; the
 reply goes out via Gmail in the original thread, the email is archived, and incoming and outgoing emails are
 recorded as activities on the member or contact in Salesforce. New general facts from approved answers are added to
 the knowledge base. Emails from officials are also highlighted under *At a Glance*, VIPs first.
@@ -214,7 +217,7 @@ with a member or contact is logged as an activity on their record, and correctio
 **Team chat.** Below *At a Glance*, the app shows the organizing team's **Google Chat** space: read the latest
 messages and write to the team without leaving the app. Status digests (overdue and upcoming tasks), the agenda and
 today's plan can be inserted into the message box with one click — you review the text before it is sent. Messages
-are sent as the Google account signed in to the app; there is no bot.
+are sent as your own Google account; there is no bot. Each team member must be a member of the space.
 
 **Privacy by design.** Member data (incl. ID data) is loaded from Salesforce into memory only and never stored on
 the Mac. Gemini never sees member data when it reads a host form — only the form's headers; email text sent to
@@ -311,10 +314,26 @@ in the app's Settings and kept in the macOS Keychain. Requested scopes: `gmail.m
 
 **Team chat:** the Google Chat API is only available for Google Workspace accounts, and Google requires the Chat API
 to be configured in the Cloud project (*Google Chat API → Configuration*: app name, avatar, description) even though
-the app only acts on behalf of the signed-in user. Create a space in Google Chat for the organizing team, add the
-account that signs in to the app, and choose the space in *Settings → Connections → Team chat*.
+the app only acts on behalf of the signed-in user.
 With a Google Workspace you can register the app as *internal*; otherwise Google's rules for external apps in
 testing mode apply.
+
+### Team members
+
+Every team member uses the app with their **own** Google account (Gmail, Drive, Calendar, Chat) and their **own**
+Salesforce user — nothing is shared through a common login. An administrator gives each new team member access to
+what the team shares:
+
+| What | Who sets it up | Access each team member needs |
+|---|---|---|
+| **Salesforce** | Salesforce admin | An active user and the permission set **Fulbright Study Tours** |
+| **Tour folder in Google Drive** (`driveParentFolderId`) | Owner of the folder | One shared folder for all tours, shared with every team member as **Editor** — the app creates one subfolder per tour in it and copies the agenda into it. Use a Google Group to share it once for the whole team |
+| **Agenda template** (`agendaTemplateId`) | Owner of the template | At least **Viewer**, so the app can copy it into a new tour folder |
+| **Knowledge base** (`knowledgeBaseURL`) | Owner of the document | **Editor** — the assistant reads it for replies and adds new facts from approved answers |
+| **Google Chat space** for the team | Chat space manager (admin) | **Member of the space**; then each person picks the space once in *Settings → Connections → Team chat* (or it is preset with `googleChatSpace`) |
+
+Without the Drive sharing the app cannot create or open the tour folders and the assistant answers without the
+knowledge base; without the Chat membership the team chat panel stays empty for that person.
 
 ### 5. Logos and artwork
 
@@ -325,10 +344,13 @@ Logos and the background artwork are trademarks of their owners and are not incl
 
 ## Data protection
 
-- Only members with the attendance status *attending* (configurable) are processed.
-- After the tour, the app clears passport/ID and emergency-contact fields on the program's members in Salesforce
-  and records a completed Task ("Data protection: passport data deleted") on every member. Administrators
-  (*Modify All Data*) can run the same deletion across the whole org.
+- **Attendees** are the program's members with the attendance status *Attending* (configurable). This one definition
+  is used for the attendee count, the member list, the data checks, the "passport incomplete" count and the host lists.
+- After the tour, the app clears a fixed set of fields — date of birth, ID type, passport/ID number, expiry date,
+  issuing country, emergency contact and emergency phone — on **all** members of the program, whatever their
+  attendance status (including invited, applied and cancelled), and records a completed Task ("Data protection:
+  passport data deleted") on every member. The fields cannot be deselected. Administrators (*Modify All Data*) can
+  run the same deletion across the whole org.
 - Every attendee list sent to a host leaves a "data shared with …" record on each member.
 - Secrets (refresh tokens, API key, Google client secret) are stored in the macOS Keychain.
 

@@ -40,7 +40,7 @@ struct OverviewView: View {
                         }
                     }
                     Card(title: "Tour status") {
-                        LabeledContent("Program (Salesforce)", value: tour.campaignName.isEmpty ? "not linked" : tour.campaignName)
+                        LabeledContent("Program", value: tour.campaignName.isEmpty ? "not linked" : tour.campaignName)
                         LabeledContent("Hosts confirmed", value: "\(tour.hosts.filter { $0.status == .confirmed || $0.status == .submitted }.count) / \(tour.hosts.count)")
                         LabeledContent("Members loaded", value: "\(state.participants.count)")
                         LabeledContent("Agenda items", value: "\(tour.agenda.count)")
@@ -92,7 +92,7 @@ struct TaskChecklist: View {
         Card(title: "Checklist") {
             if state.checklistInSalesforce && state.tour.tasks.isEmpty {
                 HStack {
-                    Text("This program has no checklist in Salesforce yet.").foregroundStyle(.secondary)
+                    Text("This program has no checklist yet.").foregroundStyle(.secondary)
                     Spacer()
                     Button("Create default checklist") { state.createDefaultChecklistAction() }.glassButton()
                 }
@@ -118,7 +118,7 @@ struct TaskChecklist: View {
                         .labelsHidden().frame(width: 110)
                         .foregroundStyle(!task.done && due < Calendar.current.startOfDay(for: Date()) ? Theme.alertOnDark : .primary)
                     if let sf = task.salesforceId, let u = state.salesforce.recordURL(sf) {
-                        Link(destination: u) { Image(systemName: "arrow.up.right.square") }.help("Open Task in Salesforce")
+                        Link(destination: u) { Image(systemName: "arrow.up.right.square") }.help("Open in the database")
                     }
                     Button { state.deleteTask(task) } label: { Image(systemName: "trash") }.buttonStyle(.borderless)
                 }
@@ -128,8 +128,8 @@ struct TaskChecklist: View {
                 Button("Add", action: add).disabled(newTitle.isEmpty)
             }
             if !state.checklistInSalesforce {
-                Text(state.tour.campaignId.isEmpty ? "Local checklist — select a program to work with the team's checklist in Salesforce."
-                     : "Local checklist — the Task phase field is not deployed in Salesforce yet.")
+                Text(state.tour.campaignId.isEmpty ? "Local checklist — select a program to work with the team's shared checklist."
+                     : "Local checklist — the checklist phase field is not deployed in the database yet.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -151,7 +151,7 @@ struct SetupTools: View {
         let i = state.tourIndex
         Card(title: "Tour") {
             Form {
-                TextField("Program name (renames the program in Salesforce)", text: $state.data.tours[i].name)
+                TextField("Program name (renames the program for the whole team)", text: $state.data.tours[i].name)
                     .disabled(state.tour.campaignId.isEmpty)
                 TextField("City / region", text: $state.data.tours[i].city)
                 DatePicker("Start", selection: $state.data.tours[i].startDate, displayedComponents: .date)
@@ -159,11 +159,11 @@ struct SetupTools: View {
             }
             .onChange(of: state.tour) { state.save() }
         }
-        Card(title: "Salesforce program (central storage)") {
+        Card(title: "Program (shared with the team)") {
             HStack {
                 Text(state.tour.campaignName.isEmpty ? "No program selected — choose one in the sidebar" : state.tour.campaignName)
                 Spacer()
-                if !state.tour.campaignId.isEmpty, let u = state.salesforce.recordURL(state.tour.campaignId) { Link("Open in Salesforce", destination: u) }
+                if !state.tour.campaignId.isEmpty, let u = state.salesforce.recordURL(state.tour.campaignId) { Link("Open in the database", destination: u) }
             }
             Text("Name, dates, city, Drive folder and agenda are fields of the program; the checklist is stored as Tasks and the host visits as Opportunities — the whole team works on the same data. Status: \(state.syncStatus)")
                 .font(.caption).foregroundStyle(.secondary)
@@ -179,7 +179,7 @@ struct SetupTools: View {
                         if let u = state.salesforce.recordURL(p.id) { Link("Open", destination: u) } }
                 }
             }
-            if !state.salesforceConnected { Text("Connect Salesforce in Settings first.").font(.caption).foregroundStyle(.secondary) }
+            if !state.salesforceConnected { Text("Connect the database in Settings first.").font(.caption).foregroundStyle(.secondary) }
         }
         Card(title: "Google Drive") {
             Text("Each study tour has its own folder in the shared study tours folder, named like the program, with a copy of the agenda template. Both links are stored on the program.")
@@ -211,7 +211,7 @@ struct HostsTools: View {
                 Button("Reload") { state.loadHostVisits() }.disabled(!state.salesforceConnected || state.tour.campaignId.isEmpty)
             }
             if state.hostVisits.isEmpty {
-                Text(state.tour.campaignId.isEmpty ? "Select the program first." : "No Opportunities linked to this program yet — create them in Salesforce (Program field on the Opportunity).")
+                Text(state.tour.campaignId.isEmpty ? "Select the program first." : "No host visits linked to this program yet — create them in the database (with this program selected on the visit).")
                     .foregroundStyle(.secondary)
             }
             ForEach(state.hostVisits) { v in
@@ -279,9 +279,9 @@ struct RegistrationTools: View {
 
     var body: some View {
         @Bindable var state = state
-        Card(title: "Members (Salesforce members in the tour program)") {
+        Card(title: "Members of the tour program") {
             HStack {
-                Button("Load from Salesforce") { state.loadParticipants() }.disabled(!state.salesforceConnected)
+                Button("Load members") { state.loadParticipants() }.disabled(!state.salesforceConnected)
                 Button("Run cleansing & passport check") { state.runCleansing() }.disabled(state.participants.isEmpty)
                 Spacer()
                 Text("\(state.participants.count) members").foregroundStyle(.secondary)
@@ -297,7 +297,7 @@ struct RegistrationTools: View {
                         Button("Select all") { state.selectedChanges = Set(report.changes.map(\.id)) }
                         Button("Select none") { state.selectedChanges = [] }
                         Spacer()
-                        Button("Write \(state.selectedChanges.count) corrections to Salesforce") { state.applySelectedChanges() }
+                        Button("Save \(state.selectedChanges.count) corrections") { state.applySelectedChanges() }
                             .buttonStyle(.borderedProminent).tint(Theme.fbBlue).disabled(state.selectedChanges.isEmpty)
                     }
                     Table(report.changes) {
@@ -461,30 +461,26 @@ struct TourDayTools: View {
 
 struct WrapUpTools: View {
     @Environment(AppState.self) private var state
-    @State private var scrubFields = Set(ParticipantField.defaultScrub)
     @State private var confirmSF = false
     @State private var confirmFiles = false
 
     var body: some View {
         ThankYouTools()
-        if state.isSalesforceAdmin { OrgWideScrub(fields: scrubFields) }
+        if state.isSalesforceAdmin { OrgWideScrub() }
         Card(title: "Scrub passport data — this program") {
-            Text("Clears identity-document fields on the members of this tour's program only (\(state.tour.campaignName)) in Salesforce and deletes every exported list (on this Mac and in Google Drive). Each step is written to the audit log below.")
+            Text("Clears the personal data below on every member of this tour's program (\(state.tour.campaignName)) in the database — whatever their attendance status, including cancelled — and deletes every exported list (on this Mac and in Google Drive). Each step is written to the audit log below.")
                 .font(.callout).foregroundStyle(.secondary)
+            Text("Fields: " + ParticipantField.defaultScrub.map(\.label).joined(separator: ", "))
+                .font(.callout.bold())
             HStack {
-                ForEach(ParticipantField.allCases.filter(\.isDeletableAfterTour)) { f in
-                    Toggle(f.label, isOn: Binding(get: { scrubFields.contains(f) }, set: { if $0 { scrubFields.insert(f) } else { scrubFields.remove(f) } }))
-                }
-            }
-            HStack {
-                Button("Clear fields in Salesforce…") { confirmSF = true }
+                Button("Clear fields in the database…") { confirmSF = true }
                     .buttonStyle(.borderedProminent).tint(Theme.usRed)
-                    .disabled(scrubFields.isEmpty || !state.salesforceConnected)
+                    .disabled(!state.salesforceConnected)
                 Button("Delete all exported files…") { confirmFiles = true }.tint(Theme.usRed)
             }
         }
-        .confirmationDialog("Permanently clear \(scrubFields.count) fields on all members of \(state.tour.campaignName)?", isPresented: $confirmSF) {
-            Button("Clear in Salesforce", role: .destructive) { state.scrubSalesforce(fields: Array(scrubFields)) }
+        .confirmationDialog("Permanently clear \(ParticipantField.defaultScrub.count) fields on all members of \(state.tour.campaignName)?", isPresented: $confirmSF) {
+            Button("Clear in the database", role: .destructive) { state.scrubSalesforce() }
         } message: { Text("This cannot be undone from the app.") }
         .confirmationDialog("Permanently delete all exported participant lists (local and Google Drive)?", isPresented: $confirmFiles) {
             Button("Delete files", role: .destructive) { state.deleteExports() }
@@ -509,7 +505,7 @@ struct ThankYouTools: View {
                 if let p = state.tour.programs.first(where: { $0.purpose.contains("Thank") }) {
                     Label("Program: \(p.name)", systemImage: "checkmark.circle")
                 } else {
-                    Button("Create thank-you program in Salesforce") { state.createThankYouProgram() }.disabled(!state.salesforceConnected)
+                    Button("Create thank-you program") { state.createThankYouProgram() }.disabled(!state.salesforceConnected)
                 }
                 Spacer()
             }
@@ -546,18 +542,18 @@ struct ThankYouTools: View {
 /// Admin-only: delete passport data on every member (Lead) in the org.
 struct OrgWideScrub: View {
     @Environment(AppState.self) private var state
-    let fields: Set<ParticipantField>
+    private let fields = ParticipantField.defaultScrub
     @State private var confirmText = ""
     private let phrase = "DELETE ALL PASSPORT DATA"
 
     var body: some View {
         Card(title: "Administrator: delete passport data across the whole database") {
-            Label("Visible because you have “Modify All Data” in Salesforce.", systemImage: "person.badge.key").font(.caption)
-            Text("Clears \(fields.map(\.label).sorted().joined(separator: ", ")) on **every member in Salesforce**, regardless of program. Converted members are read-only in Salesforce and will be reported, not changed.")
+            Label("Visible because you are a database administrator (“Modify All Data”).", systemImage: "person.badge.key").font(.caption)
+            Text("Clears \(fields.map(\.label).sorted().joined(separator: ", ")) on **every member in the database**, regardless of program. Converted members are read-only in the database and will be reported, not changed.")
                 .font(.callout).foregroundStyle(.secondary)
             HStack {
                 TextField("Type \(phrase) to confirm", text: $confirmText)
-                Button("Delete org-wide") { state.scrubOrgWide(fields: Array(fields)); confirmText = "" }
+                Button("Delete org-wide") { state.scrubOrgWide(); confirmText = "" }
                     .buttonStyle(.borderedProminent).tint(Theme.usRed)
                     .disabled(confirmText != phrase || fields.isEmpty)
             }
