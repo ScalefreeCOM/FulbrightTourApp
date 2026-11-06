@@ -195,12 +195,12 @@ struct InboxView: View {
 struct MessageDetail: View {
     @Environment(AppState.self) private var state
     let itemId: String
-    @State private var confirmSend = false
+    @State private var showQuoted = false
 
     var body: some View {
-        @Bindable var state = state
         let i = state.inbox.firstIndex { $0.id == itemId }!
         let item = state.inbox[i]
+        let parts = MailBody.split(item.message.body.isEmpty ? item.message.snippet : item.message.body)
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 4) {
@@ -247,35 +247,84 @@ struct MessageDetail: View {
                     .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
                 }
 
-                Card(title: "Message") { Text(item.message.body.isEmpty ? item.message.snippet : item.message.body).textSelection(.enabled) }
-
-                if item.identity.kind != .team {
-                    Card(title: "Reply — drafted by Gemini, sent only when you click Send (via Gmail, logged in Salesforce)") {
-                        if item.draft == nil {
-                            Button("Draft reply with Gemini") { state.draftReply(itemId) }.disabled(!state.gemini.isConfigured)
-                        } else {
-                            if let missing = item.draft?.missingInfo, !missing.isEmpty {
-                                Label("Missing: " + missing.joined(separator: "; "), systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
-                            }
-                            TextEditor(text: $state.inbox[i].draftBody).frame(minHeight: 180)
-                                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.quaternary))
-                            HStack {
-                                Text(item.status).font(.caption).foregroundStyle(.secondary)
-                                Spacer()
-                                Button("Re-draft") { state.draftReply(itemId) }
-                                Button("Send via Gmail") { confirmSend = true }
-                                    .buttonStyle(.borderedProminent).tint(Theme.fbBlue)
-                                    .disabled(item.answered || item.draftBody.contains("[CHECK") || item.identity.record == nil)
-                            }
-                            if item.identity.record == nil { Text("Create the member record first so the email is logged.").font(.caption).foregroundStyle(.secondary) }
+                Card(title: "Message") {
+                    Text(parts.new.isEmpty ? parts.quoted : parts.new).textSelection(.enabled)
+                    if !parts.new.isEmpty && !parts.quoted.isEmpty {
+                        DisclosureGroup(isExpanded: $showQuoted) {
+                            Text(parts.quoted).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        } label: {
+                            Text(showQuoted ? "Hide earlier messages" : "Show earlier messages").font(.caption)
                         }
                     }
                 }
             }
             .padding(18)
         }
-        .confirmationDialog("Send this reply to \(item.message.fromAddress) via Gmail?", isPresented: $confirmSend) {
-            Button("Send") { state.sendManually(itemId) }
+        .id(itemId)   // reset "earlier messages" when switching mails
+        // reply panel stays visible at the bottom, no scrolling needed
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if item.identity.kind != .team { ReplyPanel(itemId: itemId) }
+        }
+    }
+}
+
+/// Reply composer pinned below the message: Gemini drafts, the user edits and sends.
+struct ReplyPanel: View {
+    @Environment(AppState.self) private var state
+    let itemId: String
+    @AppStorage("replyPanelExpanded") private var expanded = true
+    @State private var confirmSend = false
+
+    var body: some View {
+        @Bindable var state = state
+        if let i = state.inbox.firstIndex(where: { $0.id == itemId }) {
+            let item = state.inbox[i]
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Label(item.answered ? "Replied" : "Reply", systemImage: item.answered ? "checkmark.circle.fill" : "arrowshape.turn.up.left")
+                        .font(.headline)
+                    Text(item.draft == nil ? "Drafted by Gemini — sent only when you click Send" : item.status)
+                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    Spacer()
+                    Button { withAnimation { expanded.toggle() } } label: { Image(systemName: expanded ? "chevron.down" : "chevron.up") }
+                        .buttonStyle(.plain).help(expanded ? "Fold the reply panel" : "Show the reply panel")
+                }
+                if expanded {
+                    if item.draft == nil {
+                        HStack {
+                            Button("Draft reply with Gemini") { state.draftReply(itemId) }.disabled(!state.gemini.isConfigured)
+                            Spacer()
+                        }
+                    } else {
+                        if let missing = item.draft?.missingInfo, !missing.isEmpty {
+                            Label("Missing: " + missing.joined(separator: "; "), systemImage: "exclamationmark.triangle")
+                                .foregroundStyle(.orange).font(.callout)
+                        }
+                        TextEditor(text: $state.inbox[i].draftBody)
+                            .font(.body).frame(height: 170)
+                            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.quaternary))
+                        HStack {
+                            if item.identity.record == nil {
+                                Text("Add the sender to Salesforce first, so the email is logged.").font(.caption).foregroundStyle(.secondary)
+                            } else if item.draftBody.contains("[CHECK") {
+                                Text("Replace the [CHECK …] parts before sending.").font(.caption).foregroundStyle(.orange)
+                            }
+                            Spacer()
+                            Button("Re-draft") { state.draftReply(itemId) }
+                            Button("Send via Gmail") { confirmSend = true }
+                                .buttonStyle(.borderedProminent).tint(Theme.fbBlue)
+                                .disabled(item.answered || item.draftBody.contains("[CHECK") || item.identity.record == nil)
+                        }
+                    }
+                }
+            }
+            .padding(14)
+            .background(.regularMaterial)
+            .overlay(alignment: .top) { Divider() }
+            .confirmationDialog("Send this reply to \(item.message.fromAddress) via Gmail?", isPresented: $confirmSend) {
+                Button("Send") { state.sendManually(itemId) }
+            }
         }
     }
 }

@@ -349,15 +349,35 @@ public enum MailBody {
     }
 
     /// Removes quoted history ("On ... wrote:" / "> ") to keep prompts and logs short.
-    public static func stripQuoted(_ body: String) -> String {
+    public static func stripQuoted(_ body: String) -> String { split(body).new }
+
+    /// Splits a mail into the new text and the quoted earlier messages of the thread
+    /// (Gmail "On … wrote:", Outlook "From: … Sent: …" blocks, "-----Original Message-----", "> " lines).
+    public static func split(_ body: String) -> (new: String, quoted: String) {
+        let all = body.split(separator: "\n", omittingEmptySubsequences: false)
         var lines: [Substring] = []
-        for line in body.split(separator: "\n", omittingEmptySubsequences: false) {
+        var cut: Int?
+        for (n, line) in all.enumerated() {
             let t = line.trimmingCharacters(in: .whitespaces)
             if t.hasPrefix(">") { continue }
-            if (t.hasPrefix("On ") && t.hasSuffix("wrote:")) || (t.hasPrefix("Am ") && t.hasSuffix("schrieb:")) { break }
-            if t.hasPrefix("-----Original Message") || t.hasPrefix("-----Ursprüngliche Nachricht") { break }
+            if (t.hasPrefix("On ") && t.hasSuffix("wrote:")) || (t.hasPrefix("Am ") && t.hasSuffix("schrieb:"))
+                || t.hasPrefix("-----Original Message") || t.hasPrefix("-----Ursprüngliche Nachricht")
+                || isOutlookHeader(all, at: n) { cut = n; break }
             lines.append(line)
         }
-        return lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        let new = lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        let quoted = cut.map { all[$0...].joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines) }
+            ?? all.filter { $0.trimmingCharacters(in: .whitespaces).hasPrefix(">") }.joined(separator: "\n")
+        return (new, quoted)
+    }
+
+    /// Outlook quotes start with "From:"/"Von:" followed within a few lines by "Sent:"/"Gesendet:"/"Date:"/"Datum:".
+    private static func isOutlookHeader(_ lines: [Substring], at n: Int) -> Bool {
+        let t = lines[n].trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "*", with: "")
+        guard t.hasPrefix("From:") || t.hasPrefix("Von:") else { return false }
+        return lines[(n + 1)..<min(n + 4, lines.count)].contains {
+            let s = $0.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "*", with: "")
+            return ["Sent:", "Gesendet:", "Date:", "Datum:"].contains { s.hasPrefix($0) }
+        }
     }
 }

@@ -171,6 +171,36 @@ final class AssistantTests: XCTestCase {
         XCTAssertEqual(Assistant.manualProposal(msg(from: "jane@example.com"), triage: nil).lastName, "")
     }
 
+    func testQuotedThreadIsSplitOff() {
+        let gmail = "Thanks, see you there!\n\nOn Mon, 3 Nov 2026 at 10:00, Jane Doe <jane@example.com> wrote:\n> Where do we meet?"
+        XCTAssertEqual(MailBody.split(gmail).new, "Thanks, see you there!")
+        XCTAssertTrue(MailBody.split(gmail).quoted.hasPrefix("On Mon"))
+
+        let outlook = "Dear team,\nconfirmed for 10:00.\n\n*From:* John Roe <john.roe@ministry.example.org>\n*Sent:* Monday, November 3, 2026\n*To:* Study Tours\nSubject: Visit\n\nOld text"
+        XCTAssertEqual(MailBody.split(outlook).new, "Dear team,\nconfirmed for 10:00.")
+        XCTAssertTrue(MailBody.split(outlook).quoted.contains("Old text"))
+
+        let german = "Passt.\n\nVon: Jane Doe\nGesendet: Montag, 3. November 2026\nAn: Team\n\nAlt"
+        XCTAssertEqual(MailBody.split(german).new, "Passt.")
+
+        // a "From:" line in normal text is not a quote header
+        let plain = "From: our side everything is fine.\nBest, Jane"
+        XCTAssertEqual(MailBody.split(plain).new, plain)
+        XCTAssertEqual(MailBody.split(plain).quoted, "")
+    }
+
+    func testRetiredGeminiModelSuccessorAndReadableErrors() {
+        let body = #"{"error": {"code": 404, "message": "This model models/gemini-2.5-pro is no longer available to new users. Please update your code to use models/gemini-3.1-pro-preview for the latest features.", "status": "NOT_FOUND"}}"#
+        XCTAssertEqual(GeminiClient.successorModel(in: body), "gemini-3.1-pro-preview")
+        XCTAssertNil(GeminiClient.successorModel(in: #"{"error": {"code": 404, "message": "Not found"}}"#))
+        // the pop-up shows Google's message, not the JSON
+        let e = APIError(service: "Gemini", status: 404, body: body)
+        XCTAssertTrue(e.localizedDescription.hasPrefix("Gemini error 404: This model models/gemini-2.5-pro is no longer available"))
+        XCTAssertFalse(e.localizedDescription.contains("{"))
+        let oauth = APIError(service: "Salesforce auth", status: 400, body: #"{"error":"invalid_grant","error_description":"expired access/refresh token"}"#)
+        XCTAssertEqual(oauth.localizedDescription, "Salesforce auth error 400: expired access/refresh token")
+    }
+
     func testEmailHeaderParsing() {
         XCTAssertEqual(EmailRules.address(from: "\"Jane Doe\" <Jane@Example.com>"), "jane@example.com")
         XCTAssertEqual(EmailRules.displayName(from: "\"Jane Doe\" <jane@example.com>"), "Jane Doe")
