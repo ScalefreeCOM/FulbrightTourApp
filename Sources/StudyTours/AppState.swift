@@ -65,7 +65,6 @@ final class AppState {
     // monitoring
     var memberCount: Int?
     var unreadCount: Int?
-    var autoRepliesSent = 0
     var lastScan: Date?
 
     // central storage (Salesforce program) & team sync
@@ -97,6 +96,8 @@ final class AppState {
     var signIn: SignInPrompt?
     /// Inbox item whose "new record" proposal is open in the review pop-up.
     var reviewingProposal: String?
+    /// Mail selected in the Inbox (also set from "At a Glance").
+    var inboxSelection: String?
 
     let salesforce: SalesforceClient
     let google: GoogleClient
@@ -676,7 +677,7 @@ final class AppState {
         name.lowercased().replacingOccurrences(of: " ", with: "-").replacingOccurrences(of: "/", with: "-")
     }
 
-    /// Scan → identify sender → triage → highlight → log activity → propose records → draft/auto-reply.
+    /// Scan → identify sender → triage → highlight → log activity → propose records → draft replies (never sent automatically).
     func processInbox() async {
         let s = settings
         do {
@@ -685,7 +686,6 @@ final class AppState {
             let loggedLabel = try await google.labelId("Study Tour/Logged")
             let answeredLabel = try await google.labelId(s.google.answeredLabel)
             var items: [InboxItem] = []
-            var sentThisRun = 0
 
             for m in messages {
                 let matches = await lookupSender(m.fromAddress)
@@ -735,26 +735,17 @@ final class AppState {
                     item.proposal = p
                 }
 
-                // 5. attendee replies (draft, and auto-send when every rule holds)
-                if !item.answered, identity.kind == .attendee, let t = item.triage, t.needsReply,
-                   item.draft == nil, gemini.isConfigured {
-                    let p = Assistant.replyPrompt(m, tour: tour, knowledgeBase: kb, settings: s.assistant, redact: s.gemini.redactNumbers)
+                // 5. draft a reply for every mail that needs one — the user reviews and sends it, nothing is sent automatically
+                if !item.answered, identity.kind != .team, let t = item.triage, t.needsReply,
+                   t.relatedToTour || identity.kind != .unknown, item.draft == nil, gemini.isConfigured {
+                    let p = Assistant.replyPrompt(m, sender: identity.kind, tour: tour, knowledgeBase: kb,
+                                                  settings: s.assistant, redact: s.gemini.redactNumbers)
                     if let text = try? await gemini.generate(system: p.system, prompt: p.prompt, json: true, temperature: 0.3),
                        let d = Assistant.decode(DraftReply.self, from: text) {
                         item.draft = d
                         item.draftBody = d.body
-                        let decision = Assistant.autoSendDecision(identity: identity, triage: t, reply: d, address: m.fromAddress,
-                                                                  settings: s.assistant, alreadyHandled: item.answered, sentThisRun: sentThisRun)
-                        if decision.allowed {
-                            do {
-                                item.status = try await sendReply(item, body: d.body) + " (auto)"
-                                item.answered = true
-                                sentThisRun += 1
-                                autoRepliesSent += 1
-                            } catch { item.status = "Auto-send failed: \(error.localizedDescription)" }
-                        } else {
-                            item.status = "Draft ready — \(decision.reason)"
-                        }
+                        item.status = d.confident && (d.missingInfo ?? []).isEmpty && !d.body.contains("[CHECK")
+                            ? "Draft ready — review and send" : "Draft ready — fill in the [CHECK] parts before sending"
                     }
                 }
                 items.append(item)
@@ -791,7 +782,6 @@ final class AppState {
     /// Replies in the original Gmail thread and marks the message as answered.
     @discardableResult
     func sendReply(_ item: InboxItem, body: String) async throws -> String {
-        guard item.identity.kind != .official else { throw AppError("Officials are answered personally, not by the assistant.") }
         let m = item.message
         let full = Assistant.composeBody(body, signature: settings.assistant.signature, original: m)
         // incoming email on the member (if the scan has not logged it yet)
@@ -813,12 +803,13 @@ final class AppState {
     }
 
     func sendManually(_ itemId: String) {
-        guard let i = inbox.firstIndex(where: { $0.id == itemId }) else { return }
-        let item = inbox[i]
+        guard let item = inbox.first(where: { $0.id == itemId }) else { return }
         run("Sending via Gmail…") {
             let how = try await self.sendReply(item, body: item.draftBody)
-            self.inbox[i].answered = true
-            self.inbox[i].status = how
+            if let j = self.inbox.firstIndex(where: { $0.id == itemId }) {
+                self.inbox[j].answered = true
+                self.inbox[j].status = how
+            }
             self.flash(how)
         }
     }
@@ -826,13 +817,16 @@ final class AppState {
     func draftReply(_ itemId: String) {
         guard let i = inbox.firstIndex(where: { $0.id == itemId }) else { return }
         let m = inbox[i].message
+        let sender = inbox[i].identity.kind
         run("Drafting reply with Gemini…") {
             let kb = await self.knowledgeBaseText()
-            let p = Assistant.replyPrompt(m, tour: self.tour, knowledgeBase: kb, settings: self.settings.assistant, redact: self.settings.gemini.redactNumbers)
+            let p = Assistant.replyPrompt(m, sender: sender, tour: self.tour, knowledgeBase: kb, settings: self.settings.assistant, redact: self.settings.gemini.redactNumbers)
             let text = try await self.gemini.generate(system: p.system, prompt: p.prompt, json: true, temperature: 0.3)
             guard let d = Assistant.decode(DraftReply.self, from: text) else { throw AppError("Could not read Gemini's reply") }
-            self.inbox[i].draft = d
-            self.inbox[i].draftBody = d.body
+            if let j = self.inbox.firstIndex(where: { $0.id == itemId }) {
+                self.inbox[j].draft = d
+                self.inbox[j].draftBody = d.body
+            }
         }
     }
 

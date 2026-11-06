@@ -165,14 +165,25 @@ public enum Assistant {
         return (system, prompt)
     }
 
-    public static func replyPrompt(_ m: MailMessage, tour: Tour, knowledgeBase: String = "", settings: AssistantSettings, redact doRedact: Bool) -> (system: String, prompt: String) {
+    public static func replyPrompt(_ m: MailMessage, sender: SenderKind = .attendee, tour: Tour, knowledgeBase: String = "",
+                                   settings: AssistantSettings, redact doRedact: Bool) -> (system: String, prompt: String) {
+        let who: String
+        switch sender {
+        case .official: who = """
+            an official of an institution the tour visits, or their office. Write formally and respectfully, \
+            address them with their title, and do not commit the team to anything that is not in the tour context.
+            """
+        case .attendee: who = "an attendee of the study tour."
+        default: who = "someone writing about the study tour (not yet known in Salesforce)."
+        }
         let system = """
-        You answer emails from attendees of a Fulbright study tour on behalf of the organising team.
+        You draft replies to emails on behalf of the volunteer team that organises a Fulbright study tour. \
+        A team member reviews and sends every draft. The sender is \(who)
         Tone: \(settings.tone). Reply in the language of the incoming email.
         Use ONLY facts from the tour context. Never invent dates, times, places, prices or promises.
         If the answer needs information you do not have, set "confident" to false, list it in "missingInfo", \
         and put a placeholder like [CHECK: what is missing] in the body.
-        Never ask attendees to send passport numbers or other ID data by email.
+        Never ask anyone to send passport numbers or other ID data by email.
         Do not include a signature; it is appended automatically.
         Respond ONLY with JSON: {"subject": string, "body": string, "confident": bool, "missingInfo": [string]}
         """
@@ -181,7 +192,7 @@ public enum Assistant {
         TOUR CONTEXT:
         \(tourContext(tour, knowledgeBase: knowledgeBase))
 
-        --- EMAIL FROM ATTENDEE ---
+        --- EMAIL FROM \(sender == .official ? "OFFICIAL" : sender == .attendee ? "ATTENDEE" : "SENDER") ---
         From: \(m.fromName)
         Subject: \(m.subject)
 
@@ -212,31 +223,6 @@ public enum Assistant {
         let quoted = MailBody.stripQuoted(original.body).split(separator: "\n", omittingEmptySubsequences: false)
             .prefix(40).map { "> " + $0 }.joined(separator: "\n")
         return "\(reply.trimmingCharacters(in: .whitespacesAndNewlines))\n\n\(signature)\n\nOn \(df.string(from: original.date)), \(original.fromName) wrote:\n\(quoted)"
-    }
-
-    // MARK: Auto-send guard
-
-    public struct AutoSendDecision: Sendable {
-        public let allowed: Bool
-        public let reason: String
-    }
-
-    /// Hard rules that must all hold before an email is sent without a human.
-    public static func autoSendDecision(identity: SenderIdentity, triage: MailTriage, reply: DraftReply,
-                                        address: String, settings: AssistantSettings,
-                                        alreadyHandled: Bool, sentThisRun: Int) -> AutoSendDecision {
-        func no(_ r: String) -> AutoSendDecision { AutoSendDecision(allowed: false, reason: r) }
-        guard settings.autoSend else { return no("Auto-send is off") }
-        guard !alreadyHandled else { return no("Already answered") }
-        guard identity.kind == .attendee, identity.record?.kind == .lead else { return no("Sender is not a known member (\(identity.kind.rawValue))") }
-        guard triage.relatedToTour, triage.senderType == "attendee" else { return no("Not classified as attendee mail about the tour") }
-        guard triage.needsReply else { return no("No reply needed") }
-        guard !triage.isHigh else { return no("High importance — needs a human") }
-        guard reply.confident, (reply.missingInfo ?? []).isEmpty else { return no("Assistant not confident / info missing") }
-        guard !reply.body.contains("[CHECK") else { return no("Draft contains [CHECK] placeholder") }
-        guard !isAutomated(address) else { return no("Automated sender") }
-        guard sentThisRun < settings.autoSendMaxPerRun else { return no("Per-run limit reached") }
-        return AutoSendDecision(allowed: true, reason: "All auto-send rules satisfied")
     }
 
     // MARK: Record proposals (new Leads / Contacts)

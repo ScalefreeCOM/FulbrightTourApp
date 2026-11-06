@@ -123,14 +123,14 @@ struct AgendaEditor: View {
 
 struct InboxView: View {
     @Environment(AppState.self) private var state
-    @State private var selected: String?
     @State private var importantOnly = false
     @AppStorage("inboxUnreadOnly") private var unreadOnly = true
 
     var body: some View {
-        // officials are answered in Gmail directly — they appear in "At a Glance" only
+        @Bindable var state = state
+        // everything except the team's own mails; officials are also highlighted in "At a Glance"
         let items = state.inbox.filter {
-            $0.identity.kind != .official && $0.identity.kind != .team && (!importantOnly || $0.important)
+            $0.identity.kind != .team && (!importantOnly || $0.important)
                 && (!unreadOnly || $0.message.labelIds.contains("UNREAD"))
         }
         HSplitView {
@@ -141,10 +141,9 @@ struct InboxView: View {
                         .help("Show only mails that are unread in Gmail")
                     Toggle("Important only", isOn: $importantOnly).toggleStyle(.switch).controlSize(.small)
                     Spacer()
-                    if state.settings.assistant.autoSend { Label("Auto-reply on", systemImage: "bolt.fill").font(.caption).foregroundStyle(Theme.skyOnDark) }
                 }
                 .padding(10)
-                List(items, selection: $selected) { item in
+                List(items, selection: $state.inboxSelection) { item in
                     HStack(alignment: .top, spacing: 8) {
                         Image(systemName: item.important ? "star.fill" : "circle").foregroundStyle(item.important ? Theme.alertOnDark : .secondary).font(.caption)
                         VStack(alignment: .leading, spacing: 2) {
@@ -173,7 +172,7 @@ struct InboxView: View {
             .padding(.trailing, 6)
 
             Group {
-                if let id = selected, state.inbox.contains(where: { $0.id == id }) { MessageDetail(itemId: id) }
+                if let id = state.inboxSelection, state.inbox.contains(where: { $0.id == id }) { MessageDetail(itemId: id) }
                 else { ContentUnavailableView("Select a message", systemImage: "envelope.open") }
             }
             .frame(minWidth: 320, maxWidth: .infinity, maxHeight: .infinity)
@@ -222,7 +221,7 @@ struct MessageDetail: View {
                     }
                 }
                 if item.identity.kind == .official {
-                    Label("Official or assistant of a host — please reply personally. The assistant never answers officials.", systemImage: "building.columns.fill")
+                    Label("Official or assistant of a host organization — check the draft carefully before sending.", systemImage: "building.columns.fill")
                         .padding(10).frame(maxWidth: .infinity, alignment: .leading)
                         .background(Theme.usRed.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
                 }
@@ -250,8 +249,8 @@ struct MessageDetail: View {
 
                 Card(title: "Message") { Text(item.message.body.isEmpty ? item.message.snippet : item.message.body).textSelection(.enabled) }
 
-                if item.identity.kind == .attendee || (item.identity.kind == .unknown && item.triage?.senderType == "attendee") {
-                    Card(title: "Reply (sent via Gmail, logged on the member in Salesforce)") {
+                if item.identity.kind != .team {
+                    Card(title: "Reply — drafted by Gemini, sent only when you click Send (via Gmail, logged in Salesforce)") {
                         if item.draft == nil {
                             Button("Draft reply with Gemini") { state.draftReply(itemId) }.disabled(!state.gemini.isConfigured)
                         } else {

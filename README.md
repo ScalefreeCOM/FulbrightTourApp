@@ -191,11 +191,12 @@ documents and calendar live in **Google Workspace**; **Google Gemini** helps wit
   <img src="docs/images/app-host-lists.png" alt="Attendee lists for host organizations in the app" width="90%">
 </p>
 
-**Email assistant.** The app scans the shared mailbox, recognizes emails from attendees, drafts replies from the
-email and the knowledge base (a Google Doc), lets you edit them, sends them via Gmail in the original thread,
-archives the email, and records incoming and outgoing emails as activities on the member in Salesforce. New
-general facts from approved answers are added to the knowledge base. Emails from officials and their offices are
-highlighted and listed under *At a Glance* — they are answered personally in Gmail.
+**Email assistant.** The app scans the shared mailbox, recognizes who wrote (members, officials and their offices,
+the team), and drafts a reply for every email that needs one from the email and the knowledge base (a Google Doc) —
+formal for officials. **Nothing is ever sent automatically:** you review and edit each draft and click Send; the
+reply goes out via Gmail in the original thread, the email is archived, and incoming and outgoing emails are
+recorded as activities on the member or contact in Salesforce. New general facts from approved answers are added to
+the knowledge base. Emails from officials are also highlighted under *At a Glance*, VIPs first.
 
 **Salesforce stays up to date.** The app maintains the team's Salesforce records as part of the daily work instead
 of as a separate chore. When an email arrives from someone who is not in Salesforce yet, the app proposes a new record

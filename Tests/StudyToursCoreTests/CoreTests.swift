@@ -106,24 +106,14 @@ final class AssistantTests: XCTestCase {
         XCTAssertEqual(Assistant.identify(address: "max@example.com", tour: tour(), salesforceMatches: [user]).kind, .team)
     }
 
-    func testAutoSendGuard() {
-        var settings = AssistantSettings(); settings.autoSend = true
-        let lead = SenderIdentity(kind: .attendee, record: SFRecordRef(kind: .lead, id: "00Q1", name: "A", email: "a@x.org", accountId: nil, accountName: nil), source: "")
-        let triage = MailTriage(relatedToTour: true, senderType: "attendee", importance: "normal", needsReply: true, topic: "", reason: "")
-        let good = DraftReply(subject: nil, body: "We meet at 9:00 at the hotel lobby.", confident: true, missingInfo: [])
-        XCTAssertTrue(Assistant.autoSendDecision(identity: lead, triage: triage, reply: good, address: "a@x.org", settings: settings, alreadyHandled: false, sentThisRun: 0).allowed)
-
-        let check = DraftReply(subject: nil, body: "We meet at [CHECK: time].", confident: true, missingInfo: [])
-        XCTAssertFalse(Assistant.autoSendDecision(identity: lead, triage: triage, reply: check, address: "a@x.org", settings: settings, alreadyHandled: false, sentThisRun: 0).allowed)
-
-        let official = SenderIdentity(kind: .official, record: nil, source: "")
-        XCTAssertFalse(Assistant.autoSendDecision(identity: official, triage: triage, reply: good, address: "a@x.org", settings: settings, alreadyHandled: false, sentThisRun: 0).allowed)
-
-        var high = triage; high.importance = "high"
-        XCTAssertFalse(Assistant.autoSendDecision(identity: lead, triage: high, reply: good, address: "a@x.org", settings: settings, alreadyHandled: false, sentThisRun: 0).allowed)
-
-        settings.autoSend = false
-        XCTAssertFalse(Assistant.autoSendDecision(identity: lead, triage: triage, reply: good, address: "a@x.org", settings: settings, alreadyHandled: false, sentThisRun: 0).allowed)
+    func testReplyPromptMatchesSender() {
+        let m = msg(from: "John Roe <john.roe@ministry.example.org>")
+        let official = Assistant.replyPrompt(m, sender: .official, tour: tour(), settings: AssistantSettings(), redact: true)
+        XCTAssertTrue(official.system.contains("official"))
+        XCTAssertTrue(official.prompt.contains("EMAIL FROM OFFICIAL"))
+        let attendee = Assistant.replyPrompt(m, sender: .attendee, tour: tour(), settings: AssistantSettings(), redact: true)
+        XCTAssertTrue(attendee.prompt.contains("EMAIL FROM ATTENDEE"))
+        XCTAssertTrue(attendee.system.contains("reviews and sends every draft"))
     }
 
     func testRedaction() {

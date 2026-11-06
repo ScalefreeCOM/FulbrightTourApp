@@ -168,11 +168,9 @@ struct AssistantSettingsView: View {
                 Stepper("Passport must be valid \(state.settings.cleansing.passportMinValidityMonths) months after the tour",
                         value: $state.settings.cleansing.passportMinValidityMonths, in: 0...24)
             }
-            Section("Automatic replies to attendees") {
-                Toggle("Send replies automatically", isOn: $state.settings.assistant.autoSend)
-                Text("Only when: sender is a member in Salesforce · mail is about the tour · not high importance · the assistant is confident and needed no missing facts. Officials (contacts) are never answered automatically.")
+            Section("Reply drafts") {
+                Text("Gemini drafts a reply for every mail that needs one — from members, officials and new senders. Nothing is ever sent automatically: you review, edit and send each reply yourself.")
                     .font(.caption).foregroundStyle(.secondary)
-                Stepper("Max \(state.settings.assistant.autoSendMaxPerRun) automatic replies per scan", value: $state.settings.assistant.autoSendMaxPerRun, in: 1...50)
                 TextField("Tone", text: $state.settings.assistant.tone)
                 TextField("Signature", text: $state.settings.assistant.signature, axis: .vertical).lineLimit(2...5)
             }

@@ -408,9 +408,8 @@ public struct GeminiSettings: Codable, Hashable, Sendable {
     public init() {}
 }
 
+/// Replies are only ever drafted; the user reviews and sends every email.
 public struct AssistantSettings: Codable, Hashable, Sendable {
-    public var autoSend: Bool = false
-    public var autoSendMaxPerRun: Int = 10
     public var pollMinutes: Int = 15
     public var signature: String = "Kind regards,\nThe Fulbright Study Tour Team"
     public var tone: String = "friendly, concise, professional"

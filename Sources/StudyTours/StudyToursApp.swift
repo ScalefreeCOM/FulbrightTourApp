@@ -247,6 +247,7 @@ struct MonitoringPanel: View {
         let today = Calendar.current.startOfDay(for: Date())
         let overdue = tour.tasks.filter { !$0.done && tour.dueDate($0) < today }.count
         let important = state.inbox.filter { $0.important && !$0.answered && $0.identity.kind != .official }.count
+        let drafts = state.inbox.filter { $0.draft != nil && !$0.answered && $0.identity.kind != .team }.count
         // VIPs first, then newest
         let officials = state.inbox.filter { $0.identity.kind == .official && $0.message.labelIds.contains("INBOX") }
             .sorted { ($0.identity.record?.vip == true ? 1 : 0, $0.message.date) > ($1.identity.record?.vip == true ? 1 : 0, $1.message.date) }
@@ -287,16 +288,17 @@ struct MonitoringPanel: View {
                            tint: proposals > 0 ? .orange : Theme.fbMid) { state.selection = .inbox }
                     Metric(icon: "building.columns.fill", label: "Officials' mails", value: "\(officials.count)",
                            tint: officials.isEmpty ? Theme.fbMid : Theme.usRed)
-                    Metric(icon: "bolt", label: "Auto-replies", value: "\(state.autoRepliesSent)", tint: Theme.fbMid)
+                    Metric(icon: "square.and.pencil", label: "Drafts to review", value: "\(drafts)",
+                           tint: drafts > 0 ? .orange : Theme.fbMid) { state.selection = .inbox }
                     Metric(icon: "calendar", label: "Agenda items", value: "\(tour.agenda.count)", tint: Theme.fbMid) { state.selection = .agenda }
                 }
 
                 if !officials.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
-                        Label("Officials & assistants (\(officials.count)) — answer in Gmail", systemImage: "building.columns")
+                        Label("Officials & assistants (\(officials.count))", systemImage: "building.columns")
                             .font(.caption.bold())
                         ForEach(officials.prefix(6)) { o in
-                            Link(destination: URL(string: "https://mail.google.com/mail/u/0/#all/\(o.message.threadId)")!) {
+                            Button { state.inboxSelection = o.id; state.selection = .inbox } label: {
                                 VStack(alignment: .leading, spacing: 1) {
                                     HStack(spacing: 4) {
                                         if o.identity.record?.vip == true { VIPBadge() }
@@ -306,7 +308,8 @@ struct MonitoringPanel: View {
                                         .font(.caption2).opacity(0.75)
                                 }
                             }
-                            .foregroundStyle(.white)
+                            .buttonStyle(.plain).foregroundStyle(.white)
+                            .help("Open in the Inbox to read and reply")
                         }
                     }
                     .padding(12).frame(maxWidth: .infinity, alignment: .leading)
