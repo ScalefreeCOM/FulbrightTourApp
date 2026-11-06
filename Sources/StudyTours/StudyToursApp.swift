@@ -94,12 +94,18 @@ struct StatusBar: View {
                     .glassPanel(cornerRadius: 20)
             }
             if let e = state.lastError {
-                HStack {
-                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.alertOnDark)
-                    Text(e).lineLimit(3).textSelection(.enabled)
-                    Button { state.lastError = nil } label: { Image(systemName: "xmark") }.buttonStyle(.plain)
+                // solid background: error text must stay readable on any artwork behind it
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "exclamationmark.triangle.fill").font(.title3)
+                    Text(e).lineLimit(8).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                    Button { state.lastError = nil } label: { Image(systemName: "xmark") }.buttonStyle(.plain).help("Dismiss")
                 }
-                .padding(10).glassPanel(cornerRadius: 14, tint: Theme.usRed.opacity(0.35))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 14).padding(.vertical, 10)
+                .frame(maxWidth: 640, alignment: .leading)
+                .background(Color(red: 0.42, green: 0.05, blue: 0.09), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.white.opacity(0.25)))
+                .shadow(radius: 8, y: 2)
             }
             if let t = state.toast {
                 Label(t, systemImage: "checkmark.circle.fill")

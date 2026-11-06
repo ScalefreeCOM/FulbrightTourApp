@@ -403,7 +403,7 @@ public struct GoogleSettings: Codable, Hashable, Sendable {
 }
 
 public struct GeminiSettings: Codable, Hashable, Sendable {
-    public var model: String = "gemini-2.5-pro"
+    public var model: String = "gemini-3.1-pro-preview"
     public var redactNumbers: Bool = true
     public init() {}
 }

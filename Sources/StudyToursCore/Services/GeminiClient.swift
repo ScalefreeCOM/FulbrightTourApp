@@ -3,6 +3,8 @@ import Foundation
 /// Google Gemini (Generative Language API) with an API key from the Keychain.
 public final class GeminiClient: @unchecked Sendable {
     public var settings: GeminiSettings
+    /// Called when Google retired the configured model and the client switched to the successor it named.
+    public var onModelChanged: (@Sendable (String) -> Void)?
     public init(settings: GeminiSettings) { self.settings = settings }
 
     public var isConfigured: Bool { !(Keychain.get(Keychain.Key.geminiKey) ?? "").isEmpty }
@@ -29,11 +31,27 @@ public final class GeminiClient: @unchecked Sendable {
             "contents": [["role": "user", "parts": [["text": prompt]]]],
             "generationConfig": config,
         ]
-        let r = try await request("models/\(settings.model):generateContent", method: "POST", body: body) as? [String: Any] ?? [:]
+        let r: [String: Any]
+        do {
+            r = try await request("models/\(settings.model):generateContent", method: "POST", body: body) as? [String: Any] ?? [:]
+        } catch let e as APIError where e.status == 404 {
+            // Google retires models ("… no longer available … use models/X"): switch to the named successor once.
+            guard let next = Self.successorModel(in: e.body), next != settings.model else { throw e }
+            settings.model = next
+            onModelChanged?(next)
+            r = try await request("models/\(next):generateContent", method: "POST", body: body) as? [String: Any] ?? [:]
+        }
         let parts = ((r["candidates"] as? [[String: Any]])?.first?["content"] as? [String: Any])?["parts"] as? [[String: Any]] ?? []
         let text = parts.compactMap { $0["text"] as? String }.joined()
         guard !text.isEmpty else { throw AppError("Gemini returned no text (possibly blocked by safety filters).") }
         return text
+    }
+
+    /// The model Google recommends in a "model not available" error, e.g. "use models/gemini-3.1-pro-preview".
+    public static func successorModel(in errorBody: String) -> String? {
+        guard let r = errorBody.range(of: #"use models/([A-Za-z0-9.\-]+)"#, options: .regularExpression) else { return nil }
+        let name = errorBody[r].replacingOccurrences(of: "use models/", with: "")
+        return name.isEmpty ? nil : name
     }
 
     public func listModels() async throws -> [String] {

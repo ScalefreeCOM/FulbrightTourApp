@@ -130,6 +130,12 @@ final class AppState {
         salesforce = SalesforceClient(settings: d.settings.salesforce)
         google = GoogleClient(settings: d.settings.google)
         gemini = GeminiClient(settings: d.settings.gemini)
+        gemini.onModelChanged = { [weak self] model in
+            Task { @MainActor in
+                self?.settings.gemini.model = model
+                self?.flash("Gemini model updated to \(model) (the previous one was retired by Google)")
+            }
+        }
         if data.tours.isEmpty { newLocalTour() }
         refreshConnectionState()
         startPolling()

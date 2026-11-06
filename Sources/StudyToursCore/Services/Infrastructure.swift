@@ -9,7 +9,20 @@ public struct APIError: LocalizedError, Sendable {
     public let service: String
     public let status: Int
     public let body: String
-    public var errorDescription: String? { "\(service) error \(status): \(body.prefix(400))" }
+    /// Readable message: Google/Salesforce JSON errors are reduced to their "message" text.
+    public var errorDescription: String? { "\(service) error \(status): \(Self.readable(body))" }
+
+    static func readable(_ body: String) -> String {
+        if let d = body.data(using: .utf8), let obj = try? JSONSerialization.jsonObject(with: d) {
+            // {"error": {"message": …}}  (Google)
+            if let e = (obj as? [String: Any])?["error"] as? [String: Any], let m = e["message"] as? String { return m }
+            // {"error": "invalid_grant", "error_description": …}  (OAuth)
+            if let o = obj as? [String: Any], let m = o["error_description"] as? String { return m }
+            // [{"message": …, "errorCode": …}]  (Salesforce)
+            if let a = obj as? [[String: Any]], let m = a.first?["message"] as? String { return m }
+        }
+        return String(body.prefix(400))
+    }
 }
 
 public struct AppError: LocalizedError, Sendable {
