@@ -201,7 +201,10 @@ highlighted and listed under *At a Glance* — they are answered personally in G
 of as a separate chore. When an email arrives from someone who is not in Salesforce yet, the app proposes a new record
 from the email: a **member** (Lead), added to the tour's program, for a prospective participant, or a **contact** with
 their **organization** (Account) for an official or their office. You confirm the proposal; right before writing, the
-app checks again that no record with that email address exists, so no duplicates are created. Every email exchanged
+app checks again that no record with that email address exists, so no duplicates are created. For any other sender
+who is not in Salesforce, **Add sender to Salesforce** opens the same review on request. For new contacts the assistant
+also suggests the **greeting** and whether the person is a **VIP** (holds the official role or is the person the group
+visits, not an assistant); VIPs are marked with a crown wherever their mail appears. Every email exchanged
 with a member or contact is logged as an activity on their record, and corrections from the data-quality check
 (names, phone numbers, dates, countries) are written back after review.
 
@@ -250,7 +253,7 @@ cp config/studytours.config.example.json config/studytours.config.json
 | `agendaTemplateId` | Google Slides template copied into each tour folder |
 | `knowledgeBaseURL` | Default knowledge base (Google Doc) for the email assistant |
 | `googleChatSpace` | Optional: link to the team's Google Chat space (can also be picked in the app's Settings) |
-| `geminiSponsorKeySuffix` | Optional: last characters of a sponsored Gemini API key. With that key the footer says "Gemini AI is paid by" the maintainer; any other key shows "Custom Gemini AI key applied" |
+| `geminiSponsorKeySuffix` | Optional: last characters of a sponsored Gemini API key. With that key the footer says "Gemini AI is sponsored by" the maintainer; any other key shows "Custom Gemini AI key applied" |
 
 `config/studytours.config.json` is git-ignored. The build script bundles it into the app.
 

@@ -46,6 +46,7 @@ public enum SFMap {
         ],
         "contact": [           // object: Contact (officials and assistants)
             "greeting": "Greeting__c",
+            "vip": "VIP__c",           // checkbox: official role or the person visited (not assistants)
         ],
     ]
 

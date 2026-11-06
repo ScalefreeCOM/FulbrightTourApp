@@ -279,7 +279,7 @@ struct RegistrationTools: View {
 
     var body: some View {
         @Bindable var state = state
-        Card(title: "Members (Salesforce Leads in the tour program)") {
+        Card(title: "Members (Salesforce members in the tour program)") {
             HStack {
                 Button("Load from Salesforce") { state.loadParticipants() }.disabled(!state.salesforceConnected)
                 Button("Run cleansing & passport check") { state.runCleansing() }.disabled(state.participants.isEmpty)
@@ -553,7 +553,7 @@ struct OrgWideScrub: View {
     var body: some View {
         Card(title: "Administrator: delete passport data across the whole database") {
             Label("Visible because you have “Modify All Data” in Salesforce.", systemImage: "person.badge.key").font(.caption)
-            Text("Clears \(fields.map(\.label).sorted().joined(separator: ", ")) on **every member (Lead) in Salesforce**, regardless of program. Converted Leads are read-only in Salesforce and will be reported, not changed.")
+            Text("Clears \(fields.map(\.label).sorted().joined(separator: ", ")) on **every member in Salesforce**, regardless of program. Converted members are read-only in Salesforce and will be reported, not changed.")
                 .font(.callout).foregroundStyle(.secondary)
             HStack {
                 TextField("Type \(phrase) to confirm", text: $confirmText)

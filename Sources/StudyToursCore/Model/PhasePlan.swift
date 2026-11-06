@@ -15,7 +15,7 @@ public enum PhasePlan {
             t(.setup, "Book kick-off team meeting (calendar)", "Coordination", -105),
 
             // 1 Host outreach
-            t(.outreach, "Select host institutions and contacts (Salesforce Accounts)", "Contacts", -100),
+            t(.outreach, "Select host institutions and contacts (Salesforce Organizations)", "Contacts", -100),
             t(.outreach, "Send invitation letters", "Letter", -92),
             t(.outreach, "Follow up on unanswered letters", "Contacts", -80),
             t(.outreach, "Record each host's data requirements and submission deadline", "Contacts", -75),

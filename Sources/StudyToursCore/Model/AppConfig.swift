@@ -22,7 +22,7 @@ public struct AppConfig: Codable, Equatable, Sendable {
     /// Default Google Chat space of the team ("spaces/…" or the space's URL). Optional; can be picked in Settings.
     public var googleChatSpace: String = ""
     /// Last characters of the sponsored Gemini API key. When the saved key ends with them,
-    /// the footer says who pays for Gemini. Optional; kept in the config so no key fragment is in the code.
+    /// the footer says who sponsors Gemini. Optional; kept in the config so no key fragment is in the code.
     public var geminiSponsorKeySuffix: String = ""
 
     public static let empty = AppConfig(salesforceURL: "", salesforceConsumerKey: "", googleClientId: "",

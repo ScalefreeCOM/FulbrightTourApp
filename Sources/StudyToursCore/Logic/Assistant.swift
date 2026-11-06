@@ -29,6 +29,10 @@ public struct MailTriage: Codable, Hashable, Sendable {
     public var lastName: String?
     public var organization: String?
     public var jobTitle: String?
+    /// The sender holds an official role or is the person the group visits (not an assistant or office staff).
+    public var vip: Bool?
+    /// Salutation for letters to the sender, in the language and formality of their mail.
+    public var greeting: String?
 
     public var isHigh: Bool { importance.lowercased() == "high" }
 }
@@ -41,7 +45,11 @@ public struct DraftReply: Codable, Hashable, Sendable {
 }
 
 public struct RecordProposal: Identifiable, Hashable, Sendable {
-    public enum Kind: String, Sendable { case lead = "Lead", contact = "Contact + Account" }
+    public enum Kind: String, Sendable {
+        case lead = "Lead", contact = "Contact + Account"
+        /// Name shown in the app (Salesforce UI labels: Member, Contact, Organization).
+        public var displayName: String { self == .lead ? "member" : "contact" }
+    }
     public var id: String { messageId }
     public let messageId: String
     public var kind: Kind
@@ -52,6 +60,10 @@ public struct RecordProposal: Identifiable, Hashable, Sendable {
     public var jobTitle: String
     public var existingAccount: SFRecordRef?
     public var possibleDuplicates: [SFRecordRef]
+    /// Set the Contact's VIP flag (suggested by the assistant, editable before creating).
+    public var vip: Bool = false
+    /// Salutation in letters (required on Contacts in the Fulbright org).
+    public var greeting: String = ""
 
     /// Safe to create without a human: nobody with this name already exists.
     public var isClean: Bool { possibleDuplicates.isEmpty && !lastName.isEmpty }
@@ -87,7 +99,7 @@ public enum Assistant {
             return SenderIdentity(kind: .official, record: nil, source: "Host email domain")
         }
         if let l = salesforceMatches.first(where: { $0.kind == .lead }) {
-            return SenderIdentity(kind: .attendee, record: l, source: "Salesforce Lead")
+            return SenderIdentity(kind: .attendee, record: l, source: "Salesforce member")
         }
         return SenderIdentity(kind: .unknown, record: nil, source: "Not in Salesforce")
     }
@@ -127,10 +139,16 @@ public enum Assistant {
         Respond ONLY with JSON matching:
         {"relatedToTour": bool, "senderType": "attendee"|"official"|"other", "importance": "high"|"normal"|"low",
          "needsReply": bool, "topic": string (max 8 words), "reason": string (max 25 words),
-         "firstName": string|null, "lastName": string|null, "organization": string|null, "jobTitle": string|null}
+         "firstName": string|null, "lastName": string|null, "organization": string|null, "jobTitle": string|null,
+         "vip": bool, "greeting": string|null}
         importance=high for: anything from officials or their offices, deadlines, security/visa/registration \
         requirements from hosts, cancellations, schedule changes, complaints, emergencies.
         Extract the sender's name, organisation and job title from the signature if present.
+        vip=true only if the sender personally holds an official role (e.g. ambassador, minister, member of parliament, \
+        commissioner, director-general, head of unit, mayor) or is the person the group visits or meets. \
+        vip=false for assistants, secretaries, office or protocol staff writing on someone's behalf, attendees and everyone else.
+        greeting = the salutation for a letter to the sender, matching the language and formality of their email \
+        and ending with a colon in English or a comma in German, e.g. "Dear Jane:", "Dear Ms. Doe:", "Sehr geehrter Herr Doe,".
         """
         let body = String(MailBody.stripQuoted(m.body).prefix(6000))
         let prompt = """
@@ -210,7 +228,7 @@ public enum Assistant {
         func no(_ r: String) -> AutoSendDecision { AutoSendDecision(allowed: false, reason: r) }
         guard settings.autoSend else { return no("Auto-send is off") }
         guard !alreadyHandled else { return no("Already answered") }
-        guard identity.kind == .attendee, identity.record?.kind == .lead else { return no("Sender is not a known Lead (\(identity.kind.rawValue))") }
+        guard identity.kind == .attendee, identity.record?.kind == .lead else { return no("Sender is not a known member (\(identity.kind.rawValue))") }
         guard triage.relatedToTour, triage.senderType == "attendee" else { return no("Not classified as attendee mail about the tour") }
         guard triage.needsReply else { return no("No reply needed") }
         guard !triage.isHigh else { return no("High importance — needs a human") }
@@ -232,14 +250,32 @@ public enum Assistant {
         case "official": kind = .contact
         default: return nil
         }
-        var first = triage.firstName ?? "", last = triage.lastName ?? ""
+        return proposal(m, kind: kind, triage: triage)
+    }
+
+    /// Proposal for any sender the user wants to add by hand ("Add sender to Salesforce"),
+    /// whether or not the assistant found the mail tour-related. Officials become Contacts, everyone else a member (Lead).
+    public static func manualProposal(_ m: MailMessage, triage: MailTriage?) -> RecordProposal {
+        proposal(m, kind: triage?.senderType == "official" ? .contact : .lead, triage: triage)
+    }
+
+    private static func proposal(_ m: MailMessage, kind: RecordProposal.Kind, triage: MailTriage?) -> RecordProposal {
+        var first = triage?.firstName ?? "", last = triage?.lastName ?? ""
         if last.isEmpty {
             let parts = m.fromName.split(separator: " ").map(String.init)
             if parts.count >= 2, !m.fromName.contains("@") { first = parts.dropLast().joined(separator: " "); last = parts.last! }
+            else if parts.count == 1, !m.fromName.contains("@") { last = parts[0] }
         }
         return RecordProposal(messageId: m.id, kind: kind, firstName: Names.normalize(first), lastName: Names.normalize(last),
-                              email: m.fromAddress, organization: triage.organization ?? "", jobTitle: triage.jobTitle ?? "",
-                              existingAccount: nil, possibleDuplicates: [])
+                              email: m.fromAddress, organization: triage?.organization ?? "", jobTitle: triage?.jobTitle ?? "",
+                              existingAccount: nil, possibleDuplicates: [], vip: kind == .contact && triage?.vip == true,
+                              greeting: defaultGreeting(suggested: triage?.greeting, firstName: Names.normalize(first)))
+    }
+
+    /// The assistant's suggestion, else the org's usual "Dear <first name>:".
+    public static func defaultGreeting(suggested: String?, firstName: String) -> String {
+        if let g = suggested?.trimmingCharacters(in: .whitespacesAndNewlines), !g.isEmpty { return String(g.prefix(100)) }
+        return firstName.isEmpty ? "To whom it may concern:" : "Dear \(firstName):"
     }
 
     // MARK: Team digest (Google Chat)

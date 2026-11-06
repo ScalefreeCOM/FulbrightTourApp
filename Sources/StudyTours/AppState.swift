@@ -83,7 +83,7 @@ final class AppState {
     private(set) var salesforceConnected = false
     private(set) var googleConnected = false
     private(set) var geminiConfigured = false
-    /// The saved Gemini key is the sponsored one (footer: "Gemini AI is paid by Scalefree").
+    /// The saved Gemini key is the sponsored one (footer: "Gemini AI is sponsored by Scalefree").
     private(set) var geminiSponsored = false
 
     // host visits (Opportunities) and attendee-list drafts
@@ -95,6 +95,8 @@ final class AppState {
     var toast: String?
     /// Sign-in waiting for the browser: shown as a sheet so the user can pick the browser/profile.
     var signIn: SignInPrompt?
+    /// Inbox item whose "new record" proposal is open in the review pop-up.
+    var reviewingProposal: String?
 
     let salesforce: SalesforceClient
     let google: GoogleClient
@@ -835,15 +837,33 @@ final class AppState {
     }
 
     /// Creates the proposed Lead or Contact (+Account) after re-checking that it doesn't exist.
+    /// "Add sender to Salesforce": prepares the review card for an unknown sender (nothing is written yet).
+    func proposeRecord(_ itemId: String) {
+        guard let item = inbox.first(where: { $0.id == itemId }) else { return }
+        run("Checking Salesforce for this sender…") {
+            var p = Assistant.manualProposal(item.message, triage: item.triage)
+            if let existing = try await self.salesforce.findPeople(email: p.email).first {
+                self.senderCache[p.email] = [existing]
+                throw AppError("\(existing.name) already exists in Salesforce as \(existing.kind.displayName).")
+            }
+            p.possibleDuplicates = (try? await self.salesforce.findPeople(firstName: p.firstName, lastName: p.lastName)) ?? []
+            let domain = p.email.split(separator: "@").last.map(String.init)
+            p.existingAccount = (try? await self.salesforce.findAccounts(name: p.organization, domain: domain))?.first
+            if let i = self.inbox.firstIndex(where: { $0.id == itemId }) { self.inbox[i].proposal = p }
+            self.reviewingProposal = itemId
+        }
+    }
+
     func createRecord(_ itemId: String, proposal p: RecordProposal) {
         guard let i = inbox.firstIndex(where: { $0.id == itemId }) else { return }
         let m = inbox[i].message
-        run("Creating \(p.kind.rawValue) in Salesforce…") {
+        reviewingProposal = nil
+        run("Creating \(p.kind.displayName) in Salesforce…") {
             // Duplicate check right before writing.
             if let existing = try await self.salesforce.findPeople(email: p.email).first {
                 self.senderCache[p.email] = [existing]
                 self.inbox[i].proposal = nil
-                throw AppError("\(existing.name) already exists as \(existing.kind.rawValue) — nothing created.")
+                throw AppError("\(existing.name) already exists as \(existing.kind.displayName) — nothing created.")
             }
             let whoId: String
             var whatId: String?
@@ -863,9 +883,14 @@ final class AppState {
                     accountId = try await self.salesforce.create("Account", fields)
                 }
                 whatId = accountId
-                whoId = try await self.salesforce.create("Contact", [
+                var contact: [String: Any] = [
                     "FirstName": p.firstName, "LastName": p.lastName.isEmpty ? p.email : p.lastName,
-                    "Email": p.email, "Title": p.jobTitle, "AccountId": accountId!])
+                    "Email": p.email, "Title": p.jobTitle, "AccountId": accountId!]
+                if p.vip, try await self.salesforce.hasContactVIP() { contact[SFMap["contact.vip"]] = true }
+                if try await self.salesforce.fieldNames(of: "Contact").contains(SFMap["contact.greeting"]) {
+                    contact[SFMap["contact.greeting"]] = String(Assistant.defaultGreeting(suggested: p.greeting, firstName: p.firstName).prefix(100))
+                }
+                whoId = try await self.salesforce.create("Contact", contact)
             }
             try await self.salesforce.logEmailTask(whoId: whoId, whatId: whatId, subject: m.subject,
                                                    body: MailBody.stripQuoted(m.body), date: m.date,
@@ -876,8 +901,9 @@ final class AppState {
             self.inbox[i].logged = true
             self.inbox[i].identity = SenderIdentity(kind: p.kind == .lead ? .attendee : .official,
                 record: SFRecordRef(kind: p.kind == .lead ? .lead : .contact, id: whoId, name: "\(p.firstName) \(p.lastName)",
-                                    email: p.email, accountId: whatId, accountName: p.organization), source: "Created now")
-            self.flash("\(p.kind.rawValue) created and email logged")
+                                    email: p.email, accountId: whatId, accountName: p.organization,
+                                    vip: p.kind == .contact && p.vip), source: "Created now")
+            self.flash("\(p.kind.displayName.capitalized) created and email logged")
         }
     }
 
@@ -1049,7 +1075,7 @@ final class AppState {
             self.tour.scrubLog.append(ScrubLogEntry(date: Date(), action: "ORG-WIDE: Salesforce fields cleared on all members",
                 detail: fields.map(\.label).joined(separator: ", ")
                     + (results.count > ok ? " — \(results.count - ok) failed" : "")
-                    + (converted > 0 ? " — \(converted) converted Leads are read-only and were skipped" : ""), count: ok))
+                    + (converted > 0 ? " — \(converted) converted members are read-only and were skipped" : ""), count: ok))
             for i in self.participants.indices { for f in fields { self.participants[i].values[f] = nil } }
             self.flash("Cleared on \(ok) members org-wide")
         }

@@ -85,7 +85,8 @@ The app always writes the English **API values** of the country picklists (e.g. 
 | Field | Type | Provided by | Used for | Mapping key |
 |---|---|---|---|---|
 | `Contact.FirstName`, `LastName`, `Email`, `Title`, `AccountId` | Standard | Standard | Recognising officials' emails; new contacts from emails | — |
-| `Contact.Greeting__c` | Text (100), **required** | Prerequisites | Salutation in letters; set when the app creates a contact | `contact.greeting` |
+| `Contact.Greeting__c` | Text (100), **required** | Prerequisites | Salutation in letters; set when the app creates a contact (suggested by the assistant, default `Dear <first name>:`) | `contact.greeting` |
+| `Contact.VIP__c` | Checkbox | Prerequisites | Officials who hold the role themselves or are the person visited (not assistants). Suggested by the assistant for new contacts; VIPs get a crown icon and are listed first | `contact.vip` |
 | `Account.Name`, `Account.Website` | Standard | Standard | Host organisation; matching by email domain | — |
 
 ## Task — checklist items and email activities

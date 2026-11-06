@@ -170,7 +170,7 @@ struct AssistantSettingsView: View {
             }
             Section("Automatic replies to attendees") {
                 Toggle("Send replies automatically", isOn: $state.settings.assistant.autoSend)
-                Text("Only when: sender is a member (Lead) in Salesforce · mail is about the tour · not high importance · the assistant is confident and needed no missing facts. Officials (Contacts) are never answered automatically.")
+                Text("Only when: sender is a member in Salesforce · mail is about the tour · not high importance · the assistant is confident and needed no missing facts. Officials (contacts) are never answered automatically.")
                     .font(.caption).foregroundStyle(.secondary)
                 Stepper("Max \(state.settings.assistant.autoSendMaxPerRun) automatic replies per scan", value: $state.settings.assistant.autoSendMaxPerRun, in: 1...50)
                 TextField("Tone", text: $state.settings.assistant.tone)

@@ -1,17 +1,25 @@
 import Foundation
 
 public struct SFRecordRef: Identifiable, Hashable, Sendable {
-    public enum Kind: String, Sendable { case lead = "Lead", contact = "Contact", account = "Account", user = "User" }
+    public enum Kind: String, Sendable {
+        case lead = "Lead", contact = "Contact", account = "Account", user = "User"
+        /// Name shown in the app, as labelled in the Fulbright org's Salesforce UI.
+        public var displayName: String {
+            switch self { case .lead: "member"; case .contact: "contact"; case .account: "organization"; case .user: "user" }
+        }
+    }
     public let kind: Kind
     public let id: String
     public let name: String
     public let email: String
     public let accountId: String?
     public let accountName: String?
+    /// Contact marked as VIP in Salesforce (official role or the person visited).
+    public var vip: Bool
 
-    public init(kind: Kind, id: String, name: String, email: String, accountId: String?, accountName: String?) {
+    public init(kind: Kind, id: String, name: String, email: String, accountId: String?, accountName: String?, vip: Bool = false) {
         self.kind = kind; self.id = id; self.name = name; self.email = email
-        self.accountId = accountId; self.accountName = accountName
+        self.accountId = accountId; self.accountName = accountName; self.vip = vip
     }
 }
 
@@ -44,6 +52,7 @@ enum F {
     static var recipient: String { SFMap["hostVisit.recipient"] }
     static var recipientRel: String { SFMap["hostVisit.recipientRelationship"] }
     static var greeting: String { SFMap["contact.greeting"] }
+    static var vip: String { SFMap["contact.vip"] }
 }
 
 /// Salesforce REST client: OAuth 2.0 web-server flow with PKCE and loopback redirect.
@@ -377,7 +386,7 @@ public final class SalesforceClient: @unchecked Sendable {
             whereClause += " AND (\(settings.leadFilter))"
         }
         guard !campaignId.isEmpty || !settings.leadFilter.isEmpty else {
-            throw AppError("Link the tour program in the Setup phase, or set a member (Lead) filter in Settings.")
+            throw AppError("Link the tour program in the Setup phase, or set a member filter in Settings.")
         }
         let rows = try await query("SELECT \(select) FROM Lead WHERE \(whereClause) ORDER BY LastName")
         return rows.map { row in
@@ -507,7 +516,7 @@ public final class SalesforceClient: @unchecked Sendable {
     public func findPeople(email: String) async throws -> [SFRecordRef] {
         let e = Self.esc(email.lowercased())
         let leads = try await query("SELECT Id, Name, Email, Company FROM Lead WHERE Email = '\(e)' AND IsConverted = false LIMIT 10")
-        let contacts = try await query("SELECT Id, Name, Email, AccountId, Account.Name FROM Contact WHERE Email = '\(e)' LIMIT 10")
+        let contacts = try await query("SELECT \(try await contactFields()) FROM Contact WHERE Email = '\(e)' LIMIT 10")
         return contacts.map(Self.contactRef) + leads.map(Self.leadRef)
     }
 
@@ -523,7 +532,7 @@ public final class SalesforceClient: @unchecked Sendable {
         guard !lastName.isEmpty else { return [] }
         let f = Self.esc(firstName), l = Self.esc(lastName)
         let leads = try await query("SELECT Id, Name, Email, Company FROM Lead WHERE FirstName = '\(f)' AND LastName = '\(l)' AND IsConverted = false LIMIT 10")
-        let contacts = try await query("SELECT Id, Name, Email, AccountId, Account.Name FROM Contact WHERE FirstName = '\(f)' AND LastName = '\(l)' LIMIT 10")
+        let contacts = try await query("SELECT \(try await contactFields()) FROM Contact WHERE FirstName = '\(f)' AND LastName = '\(l)' LIMIT 10")
         return contacts.map(Self.contactRef) + leads.map(Self.leadRef)
     }
 
@@ -545,8 +554,16 @@ public final class SalesforceClient: @unchecked Sendable {
     private static func contactRef(_ r: [String: Any]) -> SFRecordRef {
         SFRecordRef(kind: .contact, id: r["Id"] as? String ?? "", name: r["Name"] as? String ?? "",
                     email: r["Email"] as? String ?? "", accountId: r["AccountId"] as? String,
-                    accountName: (r["Account"] as? [String: Any])?["Name"] as? String)
+                    accountName: (r["Account"] as? [String: Any])?["Name"] as? String,
+                    vip: r[F.vip] as? Bool ?? false)
     }
+
+    /// Contact fields for lookups; the VIP flag only if the org has it.
+    private func contactFields() async throws -> String {
+        "Id, Name, Email, AccountId, Account.Name" + (try await hasContactVIP() ? ", \(F.vip)" : "")
+    }
+
+    public func hasContactVIP() async throws -> Bool { try await fieldNames(of: "Contact").contains(F.vip) }
 
     // MARK: Create
 

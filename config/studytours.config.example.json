@@ -6,5 +6,5 @@
   "agendaTemplateId": "ID of the Google Slides agenda template",
   "knowledgeBaseURL": "https://docs.google.com/document/d/your-knowledge-base-doc-id/edit",
   "googleChatSpace": "URL of the team's Google Chat space (optional; can also be picked in Settings)",
-  "geminiSponsorKeySuffix": "last characters of a sponsored Gemini key (optional; shows 'Gemini AI is paid by' in the footer)"
+  "geminiSponsorKeySuffix": "last characters of a sponsored Gemini key (optional; shows 'Gemini AI is sponsored by' in the footer)"
 }

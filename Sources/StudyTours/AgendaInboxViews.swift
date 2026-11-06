@@ -125,14 +125,20 @@ struct InboxView: View {
     @Environment(AppState.self) private var state
     @State private var selected: String?
     @State private var importantOnly = false
+    @AppStorage("inboxUnreadOnly") private var unreadOnly = true
 
     var body: some View {
         // officials are answered in Gmail directly — they appear in "At a Glance" only
-        let items = state.inbox.filter { $0.identity.kind != .official && $0.identity.kind != .team && (!importantOnly || $0.important) }
+        let items = state.inbox.filter {
+            $0.identity.kind != .official && $0.identity.kind != .team && (!importantOnly || $0.important)
+                && (!unreadOnly || $0.message.labelIds.contains("UNREAD"))
+        }
         HSplitView {
             VStack(spacing: 0) {
                 HStack {
                     Button { state.refreshInbox() } label: { Label("Scan", systemImage: "arrow.clockwise") }.disabled(!state.googleConnected)
+                    Toggle("Unread only", isOn: $unreadOnly).toggleStyle(.switch).controlSize(.small)
+                        .help("Show only mails that are unread in Gmail")
                     Toggle("Important only", isOn: $importantOnly).toggleStyle(.switch).controlSize(.small)
                     Spacer()
                     if state.settings.assistant.autoSend { Label("Auto-reply on", systemImage: "bolt.fill").font(.caption).foregroundStyle(Theme.skyOnDark) }
@@ -143,6 +149,7 @@ struct InboxView: View {
                         Image(systemName: item.important ? "star.fill" : "circle").foregroundStyle(item.important ? Theme.alertOnDark : .secondary).font(.caption)
                         VStack(alignment: .leading, spacing: 2) {
                             HStack {
+                                if item.identity.record?.vip == true { VIPBadge() }
                                 Text(item.message.fromName).bold().lineLimit(1)
                                 Spacer()
                                 Text(item.message.date.formatted(date: .abbreviated, time: .omitted)).font(.caption2).foregroundStyle(.secondary)
@@ -173,6 +180,12 @@ struct InboxView: View {
             .glassPanel(cornerRadius: 22)
             .padding(.leading, 6)
         }
+        // new member/contact: reviewed in a pop-up in front of everything
+        .sheet(isPresented: Binding(get: { state.reviewingProposal != nil }, set: { if !$0 { state.reviewingProposal = nil } })) {
+            if let id = state.reviewingProposal, let p = state.inbox.first(where: { $0.id == id })?.proposal {
+                ProposalSheet(itemId: id, proposal: p)
+            }
+        }
     }
 
     private func tag(_ s: String, _ c: Color) -> some View {
@@ -192,7 +205,10 @@ struct MessageDetail: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(item.message.subject).font(.title3.bold())
+                    HStack(spacing: 6) {
+                        if item.identity.record?.vip == true { VIPBadge(withLabel: true) }
+                        Text(item.message.subject).font(.title3.bold())
+                    }
                     Text("\(item.message.from) · \(item.message.date.formatted())").font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                     HStack {
                         Text("Sender: \(item.identity.kind.rawValue) (\(item.identity.source))").font(.caption)
@@ -210,7 +226,27 @@ struct MessageDetail: View {
                         .padding(10).frame(maxWidth: .infinity, alignment: .leading)
                         .background(Theme.usRed.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
                 }
-                if let p = item.proposal { ProposalCard(itemId: itemId, proposal: p) }
+                if let p = item.proposal {
+                    HStack {
+                        Label("Not in Salesforce — suggested: new \(p.kind == .lead ? "member" : "contact") \(p.firstName) \(p.lastName)\(p.vip ? " (VIP)" : "")",
+                              systemImage: "person.crop.circle.badge.plus")
+                        Spacer()
+                        Button("Review…") { state.reviewingProposal = itemId }
+                    }
+                    .padding(10)
+                    .background(Color.orange.opacity(0.15), in: RoundedRectangle(cornerRadius: 8))
+                }
+                else if item.identity.kind == .unknown {
+                    HStack {
+                        Label("This sender is not in Salesforce.", systemImage: "person.crop.circle.badge.questionmark")
+                        Spacer()
+                        Button("Add sender to Salesforce…") { state.proposeRecord(itemId) }
+                            .disabled(!state.salesforceConnected)
+                            .help("Review name, organization and record type before anything is created")
+                    }
+                    .padding(10)
+                    .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+                }
 
                 Card(title: "Message") { Text(item.message.body.isEmpty ? item.message.snippet : item.message.body).textSelection(.enabled) }
 
@@ -245,39 +281,77 @@ struct MessageDetail: View {
     }
 }
 
-struct ProposalCard: View {
+struct ProposalSheet: View {
     @Environment(AppState.self) private var state
     let itemId: String
     @State var proposal: RecordProposal
 
     var body: some View {
-        Card(title: "Not in Salesforce yet — create \(proposal.kind == .lead ? "member (Lead)" : "Contact")?") {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Add to Salesforce").font(.title2.bold())
+            Text("\(proposal.email) is not in Salesforce yet. Check the details, then create the record.")
+                .foregroundStyle(.secondary)
             Picker("Type", selection: $proposal.kind) {
-                Text("Member (Lead) — attendee").tag(RecordProposal.Kind.lead)
-                Text("Contact + Account — official/assistant").tag(RecordProposal.Kind.contact)
-            }.pickerStyle(.segmented)
-            HStack { TextField("First name", text: $proposal.firstName); TextField("Last name", text: $proposal.lastName) }
-            HStack { TextField("Organisation", text: $proposal.organization); TextField("Job title", text: $proposal.jobTitle) }
-            Text(proposal.email).font(.caption).foregroundStyle(.secondary)
+                Text("Member — attendee").tag(RecordProposal.Kind.lead)
+                Text("Contact + organization — official/assistant").tag(RecordProposal.Kind.contact)
+            }.pickerStyle(.segmented).labelsHidden()
+            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
+                GridRow { Text("First name"); TextField("First name", text: $proposal.firstName) }
+                GridRow { Text("Last name"); TextField("Last name (required)", text: $proposal.lastName) }
+                GridRow { Text("Organization"); TextField("Organization", text: $proposal.organization) }
+                GridRow { Text("Job title"); TextField("Job title", text: $proposal.jobTitle) }
+                if proposal.kind == .contact {
+                    GridRow { Text("Greeting"); TextField("e.g. Dear Jane:", text: $proposal.greeting) }
+                }
+            }
+            .textFieldStyle(.roundedBorder)
             if proposal.kind == .contact {
-                Text(proposal.existingAccount.map { "Will be added to existing Account: \($0.name)" } ?? "A new Account “\(proposal.organization)” will be created.")
-                    .font(.caption)
+                Toggle(isOn: $proposal.vip) {
+                    HStack(spacing: 6) { VIPBadge(); Text("VIP — holds an official role or is the person the group visits (not an assistant)") }
+                }
+                Text(proposal.existingAccount.map { "Will be added to the existing organization “\($0.name)”." } ?? "A new organization “\(proposal.organization)” will be created.")
+                    .font(.callout).foregroundStyle(.secondary)
+            } else {
+                Text("The member is added to the selected program.").font(.callout).foregroundStyle(.secondary)
             }
             if !proposal.possibleDuplicates.isEmpty {
-                VStack(alignment: .leading) {
+                VStack(alignment: .leading, spacing: 4) {
                     Label("Same name already exists — check before creating:", systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
                     ForEach(proposal.possibleDuplicates) { d in
-                        HStack { Text("\(d.kind.rawValue): \(d.name) <\(d.email)>"); if let u = state.salesforce.recordURL(d.id) { Link("Open", destination: u) } }.font(.caption)
+                        HStack { Text("\(d.kind.displayName.capitalized): \(d.name) <\(d.email)>"); if let u = state.salesforce.recordURL(d.id) { Link("Open", destination: u) } }.font(.caption)
                     }
                 }
             }
+            Text("Right before creating, the app checks Salesforce again by email, so no duplicates are written.")
+                .font(.caption).foregroundStyle(.secondary)
             HStack {
+                Button("Don't add") {
+                    if let i = state.inbox.firstIndex(where: { $0.id == itemId }) { state.inbox[i].proposal = nil }
+                    state.reviewingProposal = nil
+                }
+                .help("Discard this suggestion")
                 Spacer()
-                Button("Dismiss") { if let i = state.inbox.firstIndex(where: { $0.id == itemId }) { state.inbox[i].proposal = nil } }
+                Button("Cancel", role: .cancel) { state.reviewingProposal = nil }.keyboardShortcut(.cancelAction)
                 Button("Create in Salesforce") { state.createRecord(itemId, proposal: proposal) }
-                    .buttonStyle(.borderedProminent).tint(Theme.fbBlue).disabled(proposal.lastName.isEmpty)
+                    .buttonStyle(.borderedProminent).tint(Theme.fbBlue).keyboardShortcut(.defaultAction)
+                    .disabled(proposal.lastName.trimmingCharacters(in: .whitespaces).isEmpty)
             }
-            Text("The app re-checks Salesforce by email right before creating, so no duplicates are written.").font(.caption2).foregroundStyle(.secondary)
         }
+        .padding(24)
+        .frame(width: 560)
+    }
+}
+
+/// Marks Contacts flagged as VIP in Salesforce.
+struct VIPBadge: View {
+    var withLabel = false
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "crown.fill")
+            if withLabel { Text("VIP").font(.caption.bold()) }
+        }
+        .foregroundStyle(Color(red: 0.95, green: 0.75, blue: 0.2))
+        .help("VIP in Salesforce — official role or the person visited")
+        .accessibilityLabel("VIP")
     }
 }

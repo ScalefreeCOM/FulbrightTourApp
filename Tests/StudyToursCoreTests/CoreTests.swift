@@ -151,6 +151,36 @@ final class AssistantTests: XCTestCase {
         XCTAssertNil(Assistant.recordProposal(m, triage: unrelated, identity: unknown))
     }
 
+    func testManualProposalForAnySender() {
+        // no assessment at all: member (Lead), name taken from the From header
+        let p = Assistant.manualProposal(msg(from: "\"Jane Doe\" <jane@example.com>"), triage: nil)
+        XCTAssertEqual(p.kind, .lead)
+        XCTAssertEqual(p.firstName, "Jane")
+        XCTAssertEqual(p.lastName, "Doe")
+        XCTAssertEqual(p.email, "jane@example.com")
+        // not tour-related according to the assistant: still proposed when the user asks
+        var official = MailTriage(relatedToTour: false, senderType: "official", importance: "normal", needsReply: false, topic: "", reason: "")
+        official.organization = "Example Ministry"
+        let c = Assistant.manualProposal(msg(from: "John Roe <john.roe@ministry.example.org>"), triage: official)
+        XCTAssertEqual(c.kind, .contact)
+        XCTAssertEqual(c.organization, "Example Ministry")
+        XCTAssertFalse(c.vip)                       // assistant did not flag VIP
+        // VIP suggested by the assistant: only applied to contacts, never to members
+        official.vip = true
+        XCTAssertTrue(Assistant.manualProposal(msg(from: "John Roe <john.roe@ministry.example.org>"), triage: official).vip)
+        var attendee = official; attendee.senderType = "attendee"
+        XCTAssertFalse(Assistant.manualProposal(msg(from: "Jane Doe <jane@example.com>"), triage: attendee).vip)
+        // older cached assessments without the vip key still decode
+        XCTAssertNil(Assistant.decode(MailTriage.self, from: #"{"relatedToTour":true,"senderType":"official","importance":"high","needsReply":true,"topic":"x","reason":"y"}"#)?.vip)
+        // greeting: the assistant's suggestion wins, else the org's usual "Dear <first name>:"
+        XCTAssertEqual(c.greeting, "Dear John:")
+        official.greeting = "Dear Mr. Roe:"
+        XCTAssertEqual(Assistant.manualProposal(msg(from: "John Roe <john.roe@ministry.example.org>"), triage: official).greeting, "Dear Mr. Roe:")
+        XCTAssertEqual(Assistant.defaultGreeting(suggested: "  ", firstName: ""), "To whom it may concern:")
+        // address only: last name stays empty so the user has to fill it in
+        XCTAssertEqual(Assistant.manualProposal(msg(from: "jane@example.com"), triage: nil).lastName, "")
+    }
+
     func testEmailHeaderParsing() {
         XCTAssertEqual(EmailRules.address(from: "\"Jane Doe\" <Jane@Example.com>"), "jane@example.com")
         XCTAssertEqual(EmailRules.displayName(from: "\"Jane Doe\" <jane@example.com>"), "Jane Doe")

@@ -1,7 +1,8 @@
 {
   "_comment" : "Copy to salesforce-mapping.json and change only what differs in your org. Keys starting with _ are ignored.",
   "contact" : {
-    "greeting" : "Greeting__c"
+    "greeting" : "Greeting__c",
+    "vip" : "VIP__c"
   },
   "hostVisit" : {
     "listDeadline" : "List_Deadline__c",

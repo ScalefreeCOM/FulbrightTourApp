@@ -247,7 +247,9 @@ struct MonitoringPanel: View {
         let today = Calendar.current.startOfDay(for: Date())
         let overdue = tour.tasks.filter { !$0.done && tour.dueDate($0) < today }.count
         let important = state.inbox.filter { $0.important && !$0.answered && $0.identity.kind != .official }.count
+        // VIPs first, then newest
         let officials = state.inbox.filter { $0.identity.kind == .official && $0.message.labelIds.contains("INBOX") }
+            .sorted { ($0.identity.record?.vip == true ? 1 : 0, $0.message.date) > ($1.identity.record?.vip == true ? 1 : 0, $1.message.date) }
         let proposals = state.inbox.filter { $0.proposal != nil }.count
         let errors = state.report?.issues.filter { $0.severity == .error }.count
         let passportIssues = state.report?.issues.filter { $0.field?.isPassportData == true }.count
@@ -296,7 +298,10 @@ struct MonitoringPanel: View {
                         ForEach(officials.prefix(6)) { o in
                             Link(destination: URL(string: "https://mail.google.com/mail/u/0/#all/\(o.message.threadId)")!) {
                                 VStack(alignment: .leading, spacing: 1) {
-                                    Text(o.message.subject).font(.callout).lineLimit(1)
+                                    HStack(spacing: 4) {
+                                        if o.identity.record?.vip == true { VIPBadge() }
+                                        Text(o.message.subject).font(.callout).lineLimit(1)
+                                    }
                                     Text("\(o.message.fromName) · \(o.message.date.formatted(date: .abbreviated, time: .shortened))")
                                         .font(.caption2).opacity(0.75)
                                 }
@@ -401,7 +406,7 @@ struct PartnerFooter: View {
             HStack(spacing: 8) {
                 VStack(alignment: .trailing, spacing: 1) {
                     Text("Created and maintained by")
-                    if sponsored { Text("Gemini AI is paid by") }
+                    if sponsored { Text("Gemini AI is sponsored by") }
                 }
                 .font(.caption).foregroundStyle(.white.opacity(0.8))
                 if let sf = BrandImage.load("scalefree-white", trimWhitespace: false) {
