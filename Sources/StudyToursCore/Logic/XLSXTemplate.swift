@@ -48,6 +48,8 @@ public enum ZipReader {
     }
 }
 
+// Host Excel forms are filled on the Mac only: they need Foundation's XML DOM (XMLDocument), which iPadOS lacks.
+#if os(macOS)
 // MARK: - Template model
 
 /// What goes into one column of the host's template.
@@ -610,3 +612,4 @@ public enum TemplateMapper {
                                notes: "Mapped by header keywords — please check.")
     }
 }
+#endif

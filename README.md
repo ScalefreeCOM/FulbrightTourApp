@@ -175,7 +175,7 @@ deleting data) while the team keeps the decisions.
 ### How it works
 
 The app guides the team through seven phases. Everything the team shares is stored in **Salesforce**; email,
-documents and calendar live in **Google Workspace**; **Google Gemini** helps with emails and host forms. Every team
+documents and calendar live in **Google Workspace**; **Google Gemini** or **Anthropic Claude** (chosen in Settings) helps with emails and host forms. Every team
 member signs in with their **own** Google account and their **own** Salesforce user; what the team shares (tour
 folders, knowledge base, chat space) is shared with each person in Google — see [Team members](#team-members).
 
@@ -235,8 +235,8 @@ today's plan can be inserted into the message box with one click — you review 
 are sent as your own Google account; there is no bot. Each team member must be a member of the space.
 
 **Privacy by design.** Member data (incl. ID data) is loaded from Salesforce into memory only and never stored on
-the Mac. Gemini never sees member data when it reads a host form — only the form's headers; email text sent to
-Gemini has ID-, passport- and phone-like numbers masked. Local copies of filled host forms are removed after sending.
+the Mac. The AI never sees member data when it reads a host form — only the form's headers; email text sent to
+the AI has ID-, passport- and phone-like numbers masked. Local copies of filled host forms are removed after sending.
 
 ---
 
@@ -244,18 +244,45 @@ Gemini has ID-, passport- and phone-like numbers masked. Local copies of filled 
 
 ### Requirements
 
-- macOS 14 or later (the Liquid Glass design needs macOS 26; older versions fall back to a material design)
-- Xcode 16 or later to build
+- macOS 14 or later (the Liquid Glass design needs macOS 26; older versions fall back to a material design);
+  for the iPad app iPadOS 17 or later (Liquid Glass from iPadOS 26)
+- Xcode 16 or later to build; [XcodeGen](https://github.com/yonaskolb/XcodeGen) for the iPad project
 - A Salesforce org (Sales Cloud with Campaigns, Leads, Contacts, Accounts, Opportunities, Tasks)
 - Google Workspace / Google accounts for Gmail, Drive, Docs, Slides and Calendar, and a Google Cloud project for the OAuth client
-- A Google Gemini API key ([Google AI Studio](https://aistudio.google.com))
+- An API key for the AI assistant: Google Gemini ([Google AI Studio](https://aistudio.google.com)) or Anthropic
+  Claude ([Claude Console](https://console.anthropic.com)) — choose the provider in *Settings → Connections → AI assistant*
 
 ### Build
 
 ```bash
 ./scripts/build-app.sh            # → dist/Fulbright Study Tours.app
 swift test                        # unit tests
+cd iPad && xcodegen               # → iPad/FulbrightStudyToursPad.xcodeproj (open in Xcode)
 ```
+
+### iPad app
+
+The iPad app shares all code with the Mac app (`StudyToursCore` and the SwiftUI views); `iPad/project.yml` describes
+the project, from which XcodeGen generates the Xcode project. Differences from the Mac app:
+
+- **No host Excel forms** — filling and sending the hosts' attendee forms stays in the Mac app (it needs an XML
+  library that iPadOS lacks). The attendance list for the road works on both.
+- **Sign-in** opens in an in-app browser sheet that closes by itself; it uses the same OAuth clients as the Mac app.
+- **Files** (attendance list, team key file) are handed over with the share sheet (*Save to Files*, AirDrop, Mail).
+- The inbox scan and team chat refresh only run while the app is open (iPadOS pauses background apps).
+
+**Private distribution (no public App Store listing).** All options need a paid
+[Apple Developer Program](https://developer.apple.com/programs/) membership. Set your team id in `iPad/project.yml`
+(`DEVELOPMENT_TEAM`) or in Xcode under *Signing & Capabilities*.
+
+| Option | How | Good for |
+|---|---|---|
+| **TestFlight** (recommended) | Xcode → *Product → Archive* → *Distribute App → TestFlight & App Store* (upload only). In App Store Connect, add team members as testers; they install the free TestFlight app and accept the invitation. Internal testers (users of your App Store Connect team, up to 100) need no review; external testers (by email, up to 10,000) after a short beta review. Each build runs 90 days — upload a new one before it expires | A team of any size; updates arrive automatically |
+| **Ad hoc** | Register each iPad's UDID in the developer account (up to 100 per device type and year), *Distribute App → Release Testing*, share the `.ipa` (install via Apple Configurator or a download link) | A few fixed devices without TestFlight |
+| **Direct from Xcode** | Connect the iPad, select it as run destination, *Run* | Your own iPad, development |
+
+Nothing is published in the App Store with either option. A public listing would only happen if you explicitly
+submit a build for App Store review and release it.
 
 ### 1. Organization configuration (not part of this repository)
 
@@ -350,6 +377,15 @@ what the team shares:
 Without the Drive sharing the app cannot create or open the tour folders and the assistant answers without the
 knowledge base; without the Chat membership the team chat panel stays empty for that person.
 
+**Handing over the shared keys.** The AI API key(s) and the Google OAuth client secret are the same for the whole
+team and never belong in the repository. In *Settings → Connections → Share keys with the team*, **Export team key
+file…** writes them into an encrypted file (AES-256-GCM; the key is derived from a passphrase of at least 12
+characters with PBKDF2-HMAC-SHA256, 600,000 rounds). Personal sign-ins (Google and Salesforce tokens) are never
+included. Send the file and the passphrase through **different channels** — e.g. the file by email, the passphrase
+by phone or in person. The team member chooses **Import team key file…**, enters the passphrase, and the keys go
+straight into their Keychain. A wrong passphrase or a modified file is rejected. If a key leaks, replace it at the
+provider and send a new file.
+
 ### 5. Logos and artwork
 
 Logos and the background artwork are trademarks of their owners and are not included — see
@@ -367,7 +403,8 @@ Logos and the background artwork are trademarks of their owners and are not incl
   passport data deleted") on every member. The fields cannot be deselected. Administrators (*Modify All Data*) can
   run the same deletion across the whole org.
 - Every attendee list sent to a host leaves a "data shared with …" record on each member.
-- Secrets (refresh tokens, API key, Google client secret) are stored in the macOS Keychain.
+- Secrets (refresh tokens, API keys, Google client secret) are stored in the Keychain (macOS / iPadOS); the shared
+  keys are handed to team members only as an encrypted team key file.
 
 ---
 

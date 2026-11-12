@@ -1,5 +1,4 @@
 import SwiftUI
-import AppKit
 import StudyToursCore
 
 /// West → East: USA (sidebar) · Fulbright (content) · EU (inspector).
@@ -19,7 +18,7 @@ enum Theme {
 
     /// Brand typeface for digital use is Montserrat (fallback per brand guide); system font if not installed.
     static func font(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
-        NSFont(name: "Montserrat-Regular", size: size) != nil
+        Platform.fontAvailable("Montserrat-Regular")
             ? .custom("Montserrat", size: size).weight(weight)
             : .system(size: size, weight: weight)
     }
@@ -128,18 +127,18 @@ struct FulbrightHeader: View {
     }
 }
 
-// MARK: - Liquid Glass (macOS 26+), material fallback before
+// MARK: - Liquid Glass (macOS / iPadOS 26+), material fallback before
 
 extension View {
     @ViewBuilder
     func glassPanel(cornerRadius: CGFloat = 18, tint: Color? = nil) -> some View {
         // Light navy tint: the artwork still shows through the glass, white text stays readable.
         let tint = tint ?? Theme.glassTint
-        if Snapshot.active {
+        if Platform.snapshotActive {
             // Offscreen snapshots can't capture Liquid Glass; draw an opaque stand-in to review layout and contrast.
             self.background(tint, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                 .background(Theme.usNavy.opacity(0.55), in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-        } else if #available(macOS 26.0, *) {
+        } else if #available(macOS 26.0, iOS 26.0, *) {
             // .clear = see-through Liquid Glass (.regular is frosted and hides the artwork)
             self.glassEffect(Glass.clear.tint(tint), in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         } else {
@@ -157,7 +156,7 @@ extension View {
 
     @ViewBuilder
     func glassButton(prominent: Bool = false) -> some View {
-        if #available(macOS 26.0, *) {
+        if #available(macOS 26.0, iOS 26.0, *) {
             if prominent { self.buttonStyle(.glassProminent) } else { self.buttonStyle(.glass) }
         } else {
             if prominent { self.buttonStyle(.borderedProminent) } else { self.buttonStyle(.bordered) }
@@ -173,7 +172,7 @@ struct AppBackground: View {
                 Color(red: 0.89, green: 0.92, blue: 0.96)          // same blue-grey as the artwork's base tone
                 // low-contrast version of the artwork (variant B, see design/background-variants)
                 if let img = BrandImage.load("background-lowcontrast") ?? BrandImage.load(BrandImage.hero) {
-                    Image(nsImage: img).resizable().aspectRatio(contentMode: .fill)
+                    Platform.image(img).resizable().aspectRatio(contentMode: .fill)
                         .frame(width: g.size.width, height: g.size.height).clipped()
                 }
             }
@@ -225,7 +224,7 @@ enum Partner: String, CaseIterable, Identifiable {
         }
     }
 
-    var image: NSImage? { BrandImage.load(rawValue, trimWhitespace: true) }
+    var image: PlatformImage? { BrandImage.load(rawValue, trimWhitespace: true) }
 }
 
 struct PartnerLogo: View {
@@ -233,7 +232,7 @@ struct PartnerLogo: View {
     var height: CGFloat = 40
     var body: some View {
         if let img = partner.image {
-            Image(nsImage: img).resizable().scaledToFit().frame(height: height)
+            Platform.image(img).resizable().scaledToFit().frame(height: height)
         } else {
             VStack(alignment: .leading, spacing: 1) {
                 Text(partner.name).font(.caption.weight(.semibold))
@@ -253,9 +252,9 @@ enum BrandImage {
     static let fulbrightGlobe = "Fulbright_Globe_RGB_FullColor"
     static let hero = "Gemini_Generated_Image_sln0tjsln0tjsln0"
 
-    private static var cache: [String: NSImage] = [:]
+    private static var cache: [String: PlatformImage] = [:]
 
-    static func load(_ name: String, trimWhitespace: Bool = false) -> NSImage? {
+    static func load(_ name: String, trimWhitespace: Bool = false) -> PlatformImage? {
         let key = name + (trimWhitespace ? "#trim" : "")
         if let c = cache[key] { return c }
         var dirs = [Store.logosDirectory]
@@ -265,7 +264,7 @@ enum BrandImage {
             .deletingLastPathComponent().appendingPathComponent("Resources/Logos"))
         for d in dirs {
             for ext in ["png", "jpg", "jpeg"] {
-                if var i = NSImage(contentsOf: d.appendingPathComponent("\(name).\(ext)")) {
+                if var i = Platform.image(contentsOf: d.appendingPathComponent("\(name).\(ext)")) {
                     if trimWhitespace { i = trimmed(i) }
                     cache[key] = i
                     return i
@@ -278,8 +277,8 @@ enum BrandImage {
     static func invalidate() { cache = [:] }
 
     /// Crops surrounding white/transparent margins (the artwork itself is not changed).
-    static func trimmed(_ image: NSImage) -> NSImage {
-        guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return image }
+    static func trimmed(_ image: PlatformImage) -> PlatformImage {
+        guard let cg = Platform.cgImage(image) else { return image }
         let w = cg.width, h = cg.height
         guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
                                   space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
@@ -301,7 +300,7 @@ enum BrandImage {
                           width: min(maxX - minX + 1 + 2 * pad, w), height: min(maxY - minY + 1 + 2 * pad, h))
         // Bitmap buffer row 0 is the top row — same orientation as CGImage cropping.
         guard let c = cg.cropping(to: rect.intersection(CGRect(x: 0, y: 0, width: w, height: h))) else { return image }
-        return NSImage(cgImage: c, size: NSSize(width: c.width, height: c.height))
+        return Platform.image(cgImage: c)
     }
 }
 
@@ -312,7 +311,7 @@ struct HeroBanner: View {
         if let img = BrandImage.load(BrandImage.hero) ?? BrandImage.load("Background") {
             // Anchor to the top so the Fulbright mark in the artwork stays visible.
             Color.clear.frame(height: height).frame(maxWidth: .infinity)
-                .overlay(alignment: .top) { Image(nsImage: img).resizable().aspectRatio(contentMode: .fill) }
+                .overlay(alignment: .top) { Platform.image(img).resizable().aspectRatio(contentMode: .fill) }
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .accessibilityLabel("Fulbright study tour banner: United States, Fulbright, Europe")
         }

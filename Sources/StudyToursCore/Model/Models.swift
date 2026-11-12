@@ -453,13 +453,42 @@ public struct CleansingSettings: Codable, Hashable, Sendable {
     public init() {}
 }
 
+/// Which AI drafts replies, triages mail and reads host forms.
+public enum AIProvider: String, Codable, CaseIterable, Sendable {
+    case gemini = "Gemini"
+    case claude = "Claude"
+}
+
+public struct ClaudeSettings: Codable, Hashable, Sendable {
+    public var model: String = "claude-opus-5-5"
+    /// Thinking depth: low / medium / high / xhigh / max (more = slower and more tokens).
+    public var effort: String = "medium"
+    public init() {}
+}
+
 public struct AppSettings: Codable, Hashable, Sendable {
     public var salesforce = SalesforceSettings()
     public var google = GoogleSettings()
+    public var aiProvider: AIProvider = .gemini
     public var gemini = GeminiSettings()
+    public var claude = ClaudeSettings()
     public var assistant = AssistantSettings()
     public var cleansing = CleansingSettings()
     public init() {}
+
+    enum CodingKeys: String, CodingKey { case salesforce, google, aiProvider, gemini, claude, assistant, cleansing }
+
+    /// Tolerates settings saved by older versions (missing keys keep their defaults).
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        salesforce = try c.decodeIfPresent(SalesforceSettings.self, forKey: .salesforce) ?? SalesforceSettings()
+        google = try c.decodeIfPresent(GoogleSettings.self, forKey: .google) ?? GoogleSettings()
+        aiProvider = (try? c.decodeIfPresent(AIProvider.self, forKey: .aiProvider)) ?? .gemini
+        gemini = try c.decodeIfPresent(GeminiSettings.self, forKey: .gemini) ?? GeminiSettings()
+        claude = (try? c.decodeIfPresent(ClaudeSettings.self, forKey: .claude)) ?? ClaudeSettings()
+        assistant = try c.decodeIfPresent(AssistantSettings.self, forKey: .assistant) ?? AssistantSettings()
+        cleansing = try c.decodeIfPresent(CleansingSettings.self, forKey: .cleansing) ?? CleansingSettings()
+    }
 }
 
 // MARK: - Agenda / calendar

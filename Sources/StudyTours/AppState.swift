@@ -1,8 +1,8 @@
 import SwiftUI
 import UniformTypeIdentifiers
-import AppKit
 import StudyToursCore
 
+#if os(macOS)  // host Excel forms are filled on the Mac only
 /// A prepared attendee list for one host visit (in memory only — contains passport data).
 struct HostListDraft {
     var visit: HostVisit
@@ -23,6 +23,8 @@ struct HostListDraft {
         return "\(safe(tour)) – \(safe(visit.organization.isEmpty ? visit.name : visit.organization)) – attendees.xlsx"
     }
 }
+
+#endif
 
 struct InboxItem: Identifiable, Hashable {
     var id: String { message.id }
@@ -108,7 +110,9 @@ final class AppState {
 
     // host visits (Opportunities) and attendee-list drafts
     var hostVisits: [HostVisit] = []
+    #if os(macOS)
     var hostListDrafts: [String: HostListDraft] = [:]     // Opportunity Id → draft (contains passport data; memory only)
+    #endif
 
     var busy: String?
     var lastError: String?
@@ -123,6 +127,9 @@ final class AppState {
     let salesforce: SalesforceClient
     let google: GoogleClient
     let gemini: GeminiClient
+    let claude: ClaudeClient
+    /// The AI chosen in Settings (Gemini or Claude) — all assistant features go through this.
+    let ai: AIService
 
     // knowledge base (Google Doc referenced by the program's knowledge base field)
     var knowledgeBaseURL = KnowledgeBase.defaultURL
@@ -151,6 +158,15 @@ final class AppState {
         salesforce = SalesforceClient(settings: d.settings.salesforce)
         google = GoogleClient(settings: d.settings.google)
         gemini = GeminiClient(settings: d.settings.gemini)
+        claude = ClaudeClient(settings: d.settings.claude)
+        ai = AIService(gemini: gemini, claude: claude, provider: d.settings.aiProvider)
+        claude.onUsage = { [weak self] tokens in
+            Task { @MainActor in
+                guard let self else { return }
+                self.geminiTokensUsed += tokens
+                UserDefaults.standard.set(self.geminiTokensUsed, forKey: "geminiTokensUsed")
+            }
+        }
         gemini.onUsage = { [weak self] tokens in
             Task { @MainActor in
                 guard let self else { return }
@@ -194,6 +210,8 @@ final class AppState {
             salesforce.settings = newValue.salesforce
             google.settings = newValue.google
             gemini.settings = newValue.gemini
+            claude.settings = newValue.claude
+            ai.provider = newValue.aiProvider
             save()
         }
     }
@@ -232,7 +250,7 @@ final class AppState {
         Task { try? await Task.sleep(for: .seconds(4)); if toast == s { toast = nil } }
     }
 
-    nonisolated static func open(_ url: URL) { NSWorkspace.shared.open(url) }
+    nonisolated static func open(_ url: URL) { Task { @MainActor in Platform.open(url) } }
 
     var requiredFields: Set<ParticipantField> {
         Set(tour.hosts.filter { $0.status != .declined }.flatMap(\.requiredFields))
@@ -244,7 +262,7 @@ final class AppState {
     func connectSalesforce() {
         let port = settings.salesforce.callbackPort
         run("Connecting to Salesforce…") {
-            defer { self.signIn = nil }
+            defer { self.endSignIn() }
             try await self.salesforce.connect(openURL: self.showSignIn("Salesforce", port: port))
             self.refreshConnectionState()
             self.flash("Salesforce connected")
@@ -264,7 +282,7 @@ final class AppState {
     func connectGoogle() {
         let port = settings.google.callbackPort
         run("Connecting to Google…") {
-            defer { self.signIn = nil }
+            defer { self.endSignIn() }
             try await self.google.connect(openURL: self.showSignIn("Google", port: port))
             self.refreshConnectionState()
             self.flash("Google connected")
@@ -274,7 +292,19 @@ final class AppState {
     /// Instead of opening the default browser right away, show the link so the user can choose
     /// the browser or profile that is signed in with the right account.
     private func showSignIn(_ service: String, port: Int) -> (URL) -> Void {
-        { url in Task { @MainActor in self.signIn = SignInPrompt(service: service, url: url, port: port) } }
+        { url in Task { @MainActor in
+            self.signIn = SignInPrompt(service: service, url: url, port: port)
+            #if os(iOS)
+            InAppSignIn.shared.start(url) { [weak self] in self?.cancelSignIn() }   // in-app browser sheet
+            #endif
+        } }
+    }
+
+    private func endSignIn() {
+        #if os(iOS)
+        InAppSignIn.shared.finish()
+        #endif
+        signIn = nil
     }
 
     func cancelSignIn() {
@@ -288,8 +318,8 @@ final class AppState {
     func refreshConnectionState() {
         salesforceConnected = salesforce.isConnected
         googleConnected = google.isConnected
-        geminiConfigured = gemini.isConfigured
-        geminiSponsored = AppConfig.geminiKeyIsSponsored
+        geminiConfigured = ai.isConfigured
+        geminiSponsored = settings.aiProvider == .gemini && AppConfig.geminiKeyIsSponsored
     }
 
     // MARK: Setup
@@ -325,7 +355,10 @@ final class AppState {
     /// Switches to the study tour of this program.
     func selectProgram(id: String, name: String) {
         guard !id.isEmpty, id != tour.campaignId else { return }
-        participants = []; report = nil; memberCount = nil; incompletePassports = nil; inbox = []; hostVisits = []; hostListDrafts = [:]
+        participants = []; report = nil; memberCount = nil; incompletePassports = nil; inbox = []; hostVisits = []
+        #if os(macOS)
+        hostListDrafts = [:]
+        #endif
         if let cached = data.tours.first(where: { $0.campaignId == id }) {
             data.selectedTourId = cached.id
         } else {
@@ -532,9 +565,27 @@ final class AppState {
             try await self.salesforce.setProgramLinks(programId: self.tour.campaignId, folder: DriveStructure.folderURL(self.tour.driveFolderId),
                                                       agenda: DriveStructure.slidesURL(copy))
             self.tour.agendaDocId = copy
-            if let u = URL(string: DriveStructure.slidesURL(copy)) { NSWorkspace.shared.open(u) }
+            if let u = URL(string: DriveStructure.slidesURL(copy)) { Platform.open(u) }
             self.flash("Agenda created with \(entries.count) entries")
         }
+    }
+
+    // MARK: Team key file
+
+    func exportTeamKeys(passphrase: String) throws -> Data {
+        var secrets: [String: String] = [:]
+        for item in TeamKeys.shareable { if let v = Keychain.get(item.key), !v.isEmpty { secrets[item.key] = v } }
+        return try TeamKeys.seal(secrets: secrets, aiProvider: settings.aiProvider.rawValue, passphrase: passphrase)
+    }
+
+    /// Stores the keys from a team key file in this Mac's Keychain (existing values are replaced).
+    func importTeamKeys(_ data: Data, passphrase: String) throws {
+        let r = try TeamKeys.open(data, passphrase: passphrase)
+        for (k, v) in r.secrets { Keychain.set(v, for: k) }
+        if let p = r.aiProvider.flatMap(AIProvider.init(rawValue:)) { settings.aiProvider = p }
+        refreshConnectionState()
+        let names = TeamKeys.shareable.filter { r.secrets[$0.key] != nil }.map(\.label)
+        flash("Imported: " + names.joined(separator: ", "))
     }
 
     // MARK: Participants & cleansing
@@ -673,7 +724,7 @@ final class AppState {
                                                  containsPassport: host.requiredFields.contains(where: \.isPassportData),
                                                  count: self.participants.count, upload: upload)
             self.tour.hosts[i].exports.append(rec)
-            NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: rec.localPath ?? "")])
+            Platform.reveal(URL(fileURLWithPath: rec.localPath ?? ""))
             self.flash(errors.isEmpty ? "Export created" : "Export created — note: \(errors.count) data errors remain")
         }
     }
@@ -692,17 +743,12 @@ final class AppState {
                 headers: ["No.", "Last name", "First name", "Organization", "Phone", "Day 1", "Day 2", "Day 3", "Day 4"],
                 rows: sorted.enumerated().map { [String($0.offset + 1), $0.element[.lastName], $0.element[.firstName], $0.element[.organization], $0.element[.phone], "", "", "", ""] })
             let data = XLSXWriter.build([attendance])
-            let panel = NSSavePanel()
-            panel.title = "Save attendance list"
-            panel.nameFieldStringValue = "\(self.tour.name.replacingOccurrences(of: "/", with: "-")) – attendance.xlsx"
-            panel.allowedContentTypes = [UTType(filenameExtension: "xlsx") ?? .data]
-            panel.directoryURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
-            panel.canCreateDirectories = true
-            guard panel.runModal() == .OK, let url = panel.url else { return }
-            do { try data.write(to: url, options: [.atomic]) }
+            let name = "\(self.tour.name.replacingOccurrences(of: "/", with: "-")) – attendance.xlsx"
+            let url: URL?
+            do { url = try Platform.saveFile(data, name: name, title: "Save attendance list") }
             catch { throw AppError("Could not save the attendance list: \(error.localizedDescription)") }
-            NSWorkspace.shared.activateFileViewerSelecting([url])
-            self.flash("Attendance list saved: \(url.lastPathComponent) (\(sorted.count) attendees)")
+            guard let url else { return }
+            self.flash("Attendance list ready: \(url.lastPathComponent) (\(sorted.count) attendees)")
         }
     }
 
@@ -812,10 +858,10 @@ final class AppState {
 
     /// Appends new, general facts from an approved reply to the knowledge base document.
     func learnFromReply(question: String, answer: String) async {
-        guard gemini.isConfigured, google.isConnected, let id = KnowledgeBase.documentId(from: knowledgeBaseURL) else { return }
+        guard ai.isConfigured, google.isConnected, let id = KnowledgeBase.documentId(from: knowledgeBaseURL) else { return }
         let kb = await knowledgeBaseText(force: true)
         let p = KnowledgeBase.learningPrompt(question: question, answer: answer, knowledgeBase: kb)
-        guard let text = try? await gemini.generate(system: p.system, prompt: p.prompt, json: true) else { return }
+        guard let text = try? await ai.generate(system: p.system, prompt: p.prompt, json: true) else { return }
         let facts = KnowledgeBase.parseFacts(text)
         guard !facts.isEmpty else { return }
         do {
@@ -901,9 +947,9 @@ final class AppState {
 
                 // 1. triage (cached per message)
                 if let cached = triageCache[m.id] { item.triage = cached }
-                else if gemini.isConfigured {
+                else if ai.isConfigured {
                     let p = Assistant.triagePrompt(m, identity: identity, tour: tour, knowledgeBase: kb, redact: s.gemini.redactNumbers)
-                    if let text = try? await gemini.generate(system: p.system, prompt: p.prompt, json: true),
+                    if let text = try? await ai.generate(system: p.system, prompt: p.prompt, json: true),
                        let t = Assistant.decode(MailTriage.self, from: text) {
                         triageCache[m.id] = t
                         item.triage = t
@@ -940,12 +986,12 @@ final class AppState {
 
                 // 5. draft a reply for every mail that needs one — the user reviews and sends it, nothing is sent automatically
                 if !item.answered, identity.kind != .team, let t = item.triage, t.needsReply,
-                   t.relatedToTour || identity.kind != .unknown, item.draft == nil, gemini.isConfigured {
+                   t.relatedToTour || identity.kind != .unknown, item.draft == nil, ai.isConfigured {
                     let p = Assistant.replyPrompt(m, sender: identity.kind, greeting: identity.record?.greeting,
                                                   signOffName: signOffName, signOffFullName: signOffFullName,
                                                   tour: tour, knowledgeBase: kb,
                                                   settings: s.assistant, redact: s.gemini.redactNumbers)
-                    if let text = try? await gemini.generate(system: p.system, prompt: p.prompt, json: true, temperature: 0.3),
+                    if let text = try? await ai.generate(system: p.system, prompt: p.prompt, json: true, temperature: 0.3),
                        let d = Assistant.decode(DraftReply.self, from: text) {
                         item.draft = d
                         item.draftBody = ensureSignOff(d.body, to: identity.kind)
@@ -1039,7 +1085,7 @@ final class AppState {
             let kb = await self.knowledgeBaseText()
             let p = Assistant.replyPrompt(m, sender: sender, greeting: greeting, signOffName: self.signOffName,
                                           signOffFullName: self.signOffFullName, tour: self.tour, knowledgeBase: kb, settings: self.settings.assistant, redact: self.settings.gemini.redactNumbers)
-            let text = try await self.gemini.generate(system: p.system, prompt: p.prompt, json: true, temperature: 0.3)
+            let text = try await self.ai.generate(system: p.system, prompt: p.prompt, json: true, temperature: 0.3)
             guard let d = Assistant.decode(DraftReply.self, from: text) else { throw AppError("Could not read Gemini's reply") }
             if let j = self.inbox.firstIndex(where: { $0.id == itemId }) {
                 self.inbox[j].draft = d
@@ -1157,7 +1203,7 @@ final class AppState {
         for hosting the group on \(visit). Formal register. Same language as the institution's country would expect \
         (German for German institutions, otherwise English). Max 120 words. Notes from the team: \(host.notes)
         """
-        return try await gemini.generate(system: "You write formal correspondence for a non-profit alumni association.", prompt: p, json: false, temperature: 0.4)
+        return try await ai.generate(system: "You write formal correspondence for a non-profit alumni association.", prompt: p, json: false, temperature: 0.4)
     }
 
     func sendThankYou(host: Host, contact: HostContact, subject: String, body: String) {
@@ -1180,6 +1226,7 @@ final class AppState {
 
     /// Downloads the host's Excel form from the Opportunity, maps its columns (Gemini sees headers only),
     /// fills in the attending members locally and prepares the email — for review before sending.
+    #if os(macOS)
     func prepareHostList(_ visit: HostVisit) {
         run("Preparing attendee list for \(visit.organization)…") {
             guard let file = try await self.salesforce.spreadsheets(on: visit.id).first else {
@@ -1189,10 +1236,10 @@ final class AppState {
             let preview = try template.preview()
             var mapping: TemplateMapping?
             var source = "header keywords"
-            if self.gemini.isConfigured {
+            if self.ai.isConfigured {
                 let p = TemplateMapper.prompt(preview)
-                if let text = try? await self.gemini.generate(system: p.system, prompt: p.prompt, json: true),
-                   let m = TemplateMapper.parse(text, preview: preview) { mapping = m; source = "Gemini" }
+                if let text = try? await self.ai.generate(system: p.system, prompt: p.prompt, json: true),
+                   let m = TemplateMapper.parse(text, preview: preview) { mapping = m; source = self.ai.name }
             }
             guard let base = mapping ?? TemplateMapper.fallback(preview) else {
                 throw AppError("Could not recognise the columns of “\(file.title)”. Please check the form.")
@@ -1263,6 +1310,7 @@ final class AppState {
             self.flash(how)
         }
     }
+    #endif
 
     // MARK: Data protection scrub
 
@@ -1393,8 +1441,8 @@ final class AppState {
         chatTask = Task { [weak self] in
             while !Task.isCancelled {
                 // poll only while the app is in front (saves quota); otherwise check once a minute
-                if let self, self.chatReady, NSApp.isActive || self.chatMessages.isEmpty { await self.refreshChat() }
-                try? await Task.sleep(for: .seconds(NSApp.isActive ? 20 : 60))
+                if let self, self.chatReady, Platform.isActive || self.chatMessages.isEmpty { await self.refreshChat() }
+                try? await Task.sleep(for: .seconds(Platform.isActive ? 20 : 60))
             }
         }
     }

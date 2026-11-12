@@ -1,0 +1,62 @@
+# iPad app — generate the Xcode project with:  cd iPad && xcodegen
+# (the .xcodeproj is not committed). Shares all code with the Mac app:
+#   StudyToursCore (Swift package at ..) and the SwiftUI views in ../Sources/StudyTours.
+name: FulbrightStudyToursPad
+options:
+  deploymentTarget:
+    iOS: "17.0"
+packages:
+  StudyTours:
+    path: ..
+targets:
+  FulbrightStudyTours:
+    type: application
+    platform: iOS
+    sources:
+      - path: ../Sources/StudyTours
+      - path: Assets.xcassets
+    dependencies:
+      - package: StudyTours
+        product: StudyToursCore
+    preBuildScripts:
+      - name: Copy organisation config and logos
+        basedOnDependencyAnalysis: false
+        script: |
+          DEST="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH"
+          mkdir -p "$DEST/Logos"
+          if [ -f "$SRCROOT/../config/studytours.config.json" ]; then
+            cp "$SRCROOT/../config/studytours.config.json" "$DEST/config.json"
+          else
+            echo "warning: config/studytours.config.json not found — the app will ask for the configuration"
+          fi
+          # App icon (1024 px, no transparency): Resources/AppIcon.png, else the Fulbright globe — generated, not committed
+          ICON_SRC="$SRCROOT/../Resources/AppIcon.png"
+          [ -f "$ICON_SRC" ] || ICON_SRC="$SRCROOT/../Resources/Logos/Fulbright_Globe_RGB_FullColor.png"
+          if [ -f "$ICON_SRC" ]; then
+            sips -s format jpeg -z 1024 1024 "$ICON_SRC" --out "$TMPDIR/AppIcon.jpg" >/dev/null
+            sips -s format png "$TMPDIR/AppIcon.jpg" --out "$SRCROOT/Assets.xcassets/AppIcon.appiconset/AppIcon.png" >/dev/null
+          else
+            echo "warning: no app icon source (Resources/AppIcon.png) — TestFlight uploads need one"
+          fi
+          find "$SRCROOT/../Resources/Logos" -maxdepth 1 \( -name '*.png' -o -name '*.jpg' -o -name '*.jpeg' \) -exec cp {} "$DEST/Logos/" \; 2>/dev/null || true
+    settings:
+      base:
+        PRODUCT_NAME: Fulbright Study Tours
+        PRODUCT_BUNDLE_IDENTIFIER: org.fulbright.studytours.ipad
+        TARGETED_DEVICE_FAMILY: "2"          # iPad only
+        SWIFT_VERSION: "5.10"
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        INFOPLIST_KEY_CFBundleDisplayName: Fulbright Study Tours
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
+        # Only Apple's built-in cryptography (Keychain, CryptoKit) — exempt; saves the export-compliance question in TestFlight.
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
+        CODE_SIGN_STYLE: Automatic
+        # Set your Apple Developer team id here or in Xcode (Signing & Capabilities):
+        DEVELOPMENT_TEAM: ""
+        ENABLE_USER_SCRIPT_SANDBOXING: NO

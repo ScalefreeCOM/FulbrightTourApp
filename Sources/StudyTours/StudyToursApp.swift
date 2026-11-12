@@ -1,5 +1,7 @@
 import SwiftUI
+#if os(macOS)
 import AppKit
+#endif
 import StudyToursCore
 
 @main
@@ -7,23 +9,30 @@ struct StudyToursApp: App {
     @State private var state = AppState()
 
     init() {
+        #if os(macOS)
         // Needed when launched via `swift run` (no app bundle): become a regular foreground app.
         NSApplication.shared.setActivationPolicy(.regular)
+        #endif
     }
 
     var body: some Scene {
         WindowGroup("Fulbright Study Tours") {
             ContentView()
                 .environment(state)
+                #if os(macOS)
                 .frame(minWidth: 1240, minHeight: 760)
+                #endif
                 .preferredColorScheme(.dark)
                 .onAppear {
+                    #if os(macOS)
                     NSApp.activate(ignoringOtherApps: true)
+                    Snapshot.runIfRequested(state)
+                    #endif
                     Task { await state.refreshMetrics() }
                     if state.salesforceConnected { state.loadPrograms() }
-                    Snapshot.runIfRequested(state)
                 }
         }
+        #if os(macOS)
         .windowStyle(.hiddenTitleBar)
         .commands {
             CommandGroup(after: .newItem) {
@@ -36,9 +45,12 @@ struct StudyToursApp: App {
                 Button("Post Team Status to Chat…") { state.shareToTeam(Assistant.teamDigest(state.tour)) }
             }
         }
+        #endif
+        #if os(macOS)
         Settings {
             SettingsView().environment(state).frame(width: 720, height: 560).preferredColorScheme(.dark)
         }
+        #endif
     }
 }
 
@@ -424,7 +436,7 @@ struct PartnerFooter: View {
                               problem: state.salesforceProblem, reconnect: { state.reconnectSalesforce() })
                 ConnectionDot(name: "Google", on: state.googleConnected,
                               detail: state.lastScan.map { "inbox scanned \($0.formatted(date: .omitted, time: .shortened))" })
-                ConnectionDot(name: "Gemini", on: state.geminiConfigured)
+                ConnectionDot(name: state.settings.aiProvider.rawValue, on: state.geminiConfigured)
             }
             .padding(.trailing, 6)
             Divider().frame(height: 22).overlay(.white.opacity(0.3))
@@ -442,21 +454,21 @@ struct PartnerFooter: View {
             let tokens = state.geminiTokensUsed.formatted(.number.notation(.compactName))
             if !sponsored && state.geminiConfigured {
                 // someone else's key: say so, separate from the Scalefree credit
-                Text("Custom Gemini AI key applied · \(tokens) tokens used").font(.caption).foregroundStyle(.white.opacity(0.7))
+                Text("Custom \(state.settings.aiProvider.rawValue) AI key applied · \(tokens) tokens used").font(.caption).foregroundStyle(.white.opacity(0.7))
                     .padding(.trailing, 10)
-                    .help("\(state.geminiTokensUsed.formatted()) Gemini tokens used on this Mac")
+                    .help("\(state.geminiTokensUsed.formatted()) AI tokens used on this Mac")
             }
             HStack(spacing: 8) {
                 VStack(alignment: .trailing, spacing: 1) {
                     Text("Created and maintained by")
                     if sponsored {
                         Text("\(tokens) AI tokens sponsored by")
-                            .help("\(state.geminiTokensUsed.formatted()) Gemini tokens used on this Mac")
+                            .help("\(state.geminiTokensUsed.formatted()) AI tokens used on this Mac")
                     }
                 }
                 .font(.caption).foregroundStyle(.white.opacity(0.8))
                 if let sf = BrandImage.load("scalefree-white", trimWhitespace: false) {
-                    Image(nsImage: sf).resizable().scaledToFit().frame(height: 34)
+                    Platform.image(sf).resizable().scaledToFit().frame(height: 34)
                         .accessibilityLabel("Scalefree")
                 } else {
                     Text("Scalefree").font(.caption.bold()).foregroundStyle(.white)
@@ -469,6 +481,7 @@ struct PartnerFooter: View {
     }
 }
 
+#if os(macOS)
 /// Debug helper: `StudyTours --snapshot <dir>` renders each main screen to PNG and quits.
 enum Snapshot {
     static let active = CommandLine.arguments.contains("--snapshot")
@@ -511,6 +524,7 @@ enum Snapshot {
         }
     }
 }
+#endif
 
 struct NewProgramSheet: View {
     @Environment(AppState.self) private var state

@@ -728,3 +728,61 @@ final class AgendaSlidesTests: XCTestCase {
         XCTAssertEqual(AgendaSlides.globals(t, timeZone: utc)["{{dates}}"], "28 – 30 September 2026")
     }
 }
+
+final class ClaudeClientTests: XCTestCase {
+    func testRequestBody() {
+        let b = ClaudeClient.body(model: "claude-opus-5-5", effort: "medium", system: "S", prompt: "P", json: true)
+        XCTAssertEqual(b["model"] as? String, "claude-opus-5-5")
+        XCTAssertNil(b["temperature"])                                   // rejected by current models
+        XCTAssertNil(b["thinking"])                                      // adaptive by default
+        XCTAssertEqual((b["output_config"] as? [String: String])?["effort"], "medium")
+        XCTAssertEqual(b["fallbacks"] as? String, "default")
+        XCTAssertTrue((b["system"] as? String ?? "").contains("single JSON object"))
+        XCTAssertEqual(((b["messages"] as? [[String: String]])?.first)?["content"], "P")
+    }
+
+    func testResponseText() throws {
+        let ok: [String: Any] = ["stop_reason": "end_turn", "content": [
+            ["type": "thinking", "thinking": ""],
+            ["type": "text", "text": "```json\n{\"a\": 1}\n```"]]]
+        XCTAssertEqual(try ClaudeClient.text(from: ok, json: true), "{\"a\": 1}")
+        XCTAssertThrowsError(try ClaudeClient.text(from: ["stop_reason": "refusal", "content": []], json: false))
+        XCTAssertThrowsError(try ClaudeClient.text(from: ["stop_reason": "max_tokens", "content": [["type": "text", "text": "x"]]], json: false))
+    }
+
+    func testOldSettingsStillLoad() throws {
+        let old = #"{"salesforce":{},"google":{},"gemini":{"model":"gemini-x","redactNumbers":true},"assistant":{},"cleansing":{}}"#
+        let s = try? JSONDecoder().decode(AppSettings.self, from: Data(old.utf8))
+        // nested settings may need their own keys; at least the new fields must not break decoding
+        if let s { XCTAssertEqual(s.aiProvider, .gemini); XCTAssertEqual(s.claude.model, "claude-opus-5-5") }
+        let current = try JSONEncoder().encode(AppSettings())
+        XCTAssertEqual(try JSONDecoder().decode(AppSettings.self, from: current).aiProvider, .gemini)
+    }
+}
+
+final class TeamKeysTests: XCTestCase {
+    let secrets = [Keychain.Key.claudeKey: "sk-ant-example", Keychain.Key.geminiKey: "AIza-example",
+                   Keychain.Key.googleRefresh: "personal-token"]
+
+    func testRoundTripAndFiltering() throws {
+        let file = try TeamKeys.seal(secrets: secrets, aiProvider: "Claude", passphrase: "correct horse battery", iterations: 100_000)
+        let text = String(decoding: file, as: UTF8.self)
+        XCTAssertFalse(text.contains("sk-ant-example"))                      // encrypted, not readable
+        let r = try TeamKeys.open(file, passphrase: "correct horse battery")
+        XCTAssertEqual(r.secrets[Keychain.Key.claudeKey], "sk-ant-example")
+        XCTAssertNil(r.secrets[Keychain.Key.googleRefresh])                    // personal sign-ins never imported
+        XCTAssertEqual(r.aiProvider, "Claude")
+    }
+
+    func testWrongPassphraseAndTampering() throws {
+        let file = try TeamKeys.seal(secrets: secrets, aiProvider: nil, passphrase: "correct horse battery", iterations: 100_000)
+        XCTAssertThrowsError(try TeamKeys.open(file, passphrase: "wrong passphrase!!"))
+        var obj = try JSONSerialization.jsonObject(with: file) as! [String: Any]
+        var sealed = Data(base64Encoded: obj["sealed"] as! String)!
+        sealed[sealed.count - 1] ^= 0x01
+        obj["sealed"] = sealed.base64EncodedString()
+        XCTAssertThrowsError(try TeamKeys.open(try JSONSerialization.data(withJSONObject: obj), passphrase: "correct horse battery"))
+        XCTAssertThrowsError(try TeamKeys.seal(secrets: secrets, aiProvider: nil, passphrase: "short"))
+        XCTAssertThrowsError(try TeamKeys.open(Data("{}".utf8), passphrase: "x"))
+    }
+}

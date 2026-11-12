@@ -1,5 +1,4 @@
 import SwiftUI
-import AppKit
 import StudyToursCore
 
 // MARK: - Agenda & calendar
@@ -137,7 +136,7 @@ struct InboxView: View {
             $0.identity.kind != .team && (!importantOnly || $0.important)
                 && (!unreadOnly || $0.message.labelIds.contains("UNREAD"))
         }
-        HSplitView {
+        SplitPane {
             VStack(spacing: 0) {
                 HStack {
                     Button { state.refreshInbox() } label: { Label("Scan", systemImage: "arrow.clockwise") }
@@ -373,7 +372,7 @@ struct ReplyPanel: View {
                 HStack {
                     Label(item.answered ? "Replied" : "Reply", systemImage: item.answered ? "checkmark.circle.fill" : "arrowshape.turn.up.left")
                         .font(.headline)
-                    Text(item.draft == nil ? "Drafted by Gemini — sent only when you click Send" : item.status)
+                    Text(item.draft == nil ? "Drafted by \(state.ai.name) — sent only when you click Send" : item.status)
                         .font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
                         .layoutPriority(-1)
                     Spacer()
@@ -384,7 +383,7 @@ struct ReplyPanel: View {
                     CCRow(itemId: itemId, cc: state.replyCC(for: item))
                     if item.draft == nil {
                         HStack {
-                            Button("Draft reply with Gemini") { state.draftReply(itemId) }.disabled(!state.gemini.isConfigured)
+                            Button("Draft reply with \(state.ai.name)") { state.draftReply(itemId) }.disabled(!state.ai.isConfigured)
                             Spacer()
                         }
                     } else {

@@ -1,5 +1,7 @@
 import SwiftUI
+#if os(macOS)
 import AppKit
+#endif
 import UniformTypeIdentifiers
 import StudyToursCore
 
@@ -12,7 +14,9 @@ struct SettingsView: View {
             BrandingSettings().tabItem { Label("Branding", systemImage: "photo") }
         }
         .padding(20)
+        #if os(macOS)
         .sheet(item: Binding(get: { state.signIn }, set: { if $0 == nil { state.cancelSignIn() } })) { SignInSheet(prompt: $0) }
+        #endif
     }
 }
 
@@ -39,8 +43,7 @@ struct SignInSheet: View {
                 Button("Cancel", role: .cancel) { state.cancelSignIn() }
                 Spacer()
                 Button(copied ? "Link copied" : "Copy link") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(prompt.url.absoluteString, forType: .string)
+                    Platform.copy(prompt.url.absoluteString)
                     copied = true
                 }
                 Button("Open in default browser") { AppState.open(prompt.url) }.keyboardShortcut(.defaultAction)
@@ -109,16 +112,40 @@ struct ConnectionsSettings: View {
             Section("Team chat (Google Chat)") {
                 ChatSpaceSettings()
             }
-            Section("Google Gemini") {
-                SecretField(title: "Gemini API key", key: Keychain.Key.geminiKey)
-                HStack {
-                    TextField("Model", text: $state.settings.gemini.model)
-                    Button("List models") { state.run("Loading models…") { models = try await state.gemini.listModels() } }
+            Section("Share keys with the team") {
+                TeamKeysSettings()
+            }
+            Section("AI assistant") {
+                Picker("Provider", selection: $state.settings.aiProvider) {
+                    ForEach(AIProvider.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                 }
-                if !models.isEmpty {
-                    Picker("Available", selection: $state.settings.gemini.model) { ForEach(models, id: \.self) { Text($0).tag($0) } }
+                .pickerStyle(.segmented)
+                .onChange(of: state.settings.aiProvider) { models = []; state.refreshConnectionState() }
+                if state.settings.aiProvider == .gemini {
+                    SecretField(title: "Gemini API key", key: Keychain.Key.geminiKey)
+                    HStack {
+                        TextField("Model", text: $state.settings.gemini.model)
+                        Button("List models") { state.run("Loading models…") { models = try await state.ai.listModels() } }
+                    }
+                    if !models.isEmpty {
+                        Picker("Available", selection: $state.settings.gemini.model) { ForEach(models, id: \.self) { Text($0).tag($0) } }
+                    }
+                } else {
+                    SecretField(title: "Claude API key", key: Keychain.Key.claudeKey)
+                    HStack {
+                        TextField("Model", text: $state.settings.claude.model)
+                        Button("List models") { state.run("Loading models…") { models = try await state.ai.listModels() } }
+                    }
+                    if !models.isEmpty {
+                        Picker("Available", selection: $state.settings.claude.model) { ForEach(models, id: \.self) { Text($0).tag($0) } }
+                    }
+                    Picker("Thinking effort", selection: $state.settings.claude.effort) {
+                        ForEach(["low", "medium", "high", "xhigh", "max"], id: \.self) { Text($0).tag($0) }
+                    }
+                    Text("Claude keys come from console.anthropic.com. Higher effort gives more careful drafts but is slower and uses more tokens.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
-                Toggle("Redact ID/passport/phone-like numbers before sending mail text to Gemini", isOn: $state.settings.gemini.redactNumbers)
+                Toggle("Redact ID/passport/phone-like numbers before sending mail text to the AI", isOn: $state.settings.gemini.redactNumbers)
             }
         }
         .formStyle(.grouped)
@@ -198,10 +225,12 @@ struct BrandingSettings: View {
                             }
                             return true
                         }
+                    #if os(macOS)
                     Button("Choose…") {
                         let panel = NSOpenPanel(); panel.allowedContentTypes = [.png, .jpeg]
                         if panel.runModal() == .OK, let u = panel.url { install(u, for: p) }
                     }
+                    #endif
                     Text(p.name)
                 }
             }
@@ -216,5 +245,94 @@ struct BrandingSettings: View {
         try? FileManager.default.copyItem(at: url, to: Store.logosDirectory.appendingPathComponent("\(p.rawValue).\(ext)"))
         BrandImage.invalidate()
         refresh += 1
+    }
+}
+
+
+// MARK: - Team key file (encrypted export / import of the shared API keys)
+
+struct TeamKeysDocument: FileDocument {
+    static var readableContentTypes: [UTType] { [TeamKeysDocument.type, .json, .data] }
+    static let type = UTType(filenameExtension: TeamKeys.fileExtension) ?? .data
+    var data: Data
+    init(data: Data) { self.data = data }
+    init(configuration: ReadConfiguration) throws { data = configuration.file.regularFileContents ?? Data() }
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper { FileWrapper(regularFileWithContents: data) }
+}
+
+struct TeamKeysSettings: View {
+    @Environment(AppState.self) private var state
+    enum Mode: Identifiable { case export, importFile(Data); var id: String { if case .export = self { "e" } else { "i" } } }
+    @State private var mode: Mode?
+    @State private var exportDoc: TeamKeysDocument?
+    @State private var showExporter = false
+    @State private var showImporter = false
+
+    var body: some View {
+        Text("Hand the shared keys (AI keys, Google client secret) to a team member as an encrypted file. Personal sign-ins are never included — everyone still signs in to Google and Salesforce themselves. Send the file and the passphrase through different channels, e.g. the file by email and the passphrase by phone.")
+            .font(.caption).foregroundStyle(.secondary)
+        HStack {
+            Button("Export team key file…") { mode = .export }
+            Button("Import team key file…") { showImporter = true }
+        }
+        .sheet(item: $mode) { m in
+            PassphraseSheet(exporting: { if case .export = m { true } else { false } }()) { passphrase in
+                switch m {
+                case .export:
+                    exportDoc = TeamKeysDocument(data: try state.exportTeamKeys(passphrase: passphrase))
+                    DispatchQueue.main.async { showExporter = true }
+                case .importFile(let data):
+                    try state.importTeamKeys(data, passphrase: passphrase)
+                }
+            }
+        }
+        .fileExporter(isPresented: $showExporter, document: exportDoc, contentType: TeamKeysDocument.type,
+                      defaultFilename: "Fulbright team keys.\(TeamKeys.fileExtension)") { result in
+            if case .failure(let e) = result { state.lastError = e.localizedDescription }
+            else { state.flash("Team key file saved — send the passphrase separately") }
+            exportDoc = nil
+        }
+        .fileImporter(isPresented: $showImporter, allowedContentTypes: TeamKeysDocument.readableContentTypes) { result in
+            switch result {
+            case .success(let url):
+                let access = url.startAccessingSecurityScopedResource()
+                defer { if access { url.stopAccessingSecurityScopedResource() } }
+                do { mode = .importFile(try Data(contentsOf: url)) } catch { state.lastError = error.localizedDescription }
+            case .failure(let e): state.lastError = e.localizedDescription
+            }
+        }
+    }
+}
+
+/// Asks for the passphrase (twice when exporting) and runs the action; errors stay in the sheet.
+struct PassphraseSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let exporting: Bool
+    let action: (String) throws -> Void
+    @State private var pass = ""
+    @State private var repeatPass = ""
+    @State private var error: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(exporting ? "Encrypt the team key file" : "Import team key file").font(.headline)
+            Text(exporting ? "Choose a passphrase of at least \(TeamKeys.minimumPassphraseLength) characters. Your team member needs it to open the file." :
+                             "Enter the passphrase you received separately from the file.")
+                .font(.callout).foregroundStyle(.secondary)
+            SecureField("Passphrase", text: $pass)
+            if exporting { SecureField("Repeat passphrase", text: $repeatPass) }
+            if let error { Text(error).font(.callout).foregroundStyle(.red) }
+            HStack {
+                Spacer()
+                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button(exporting ? "Encrypt…" : "Import") {
+                    if exporting && pass != repeatPass { error = "The passphrases do not match."; return }
+                    do { try action(pass); dismiss() } catch { self.error = error.localizedDescription }
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(pass.count < (exporting ? TeamKeys.minimumPassphraseLength : 1))
+            }
+        }
+        .padding(20).frame(width: 420)
     }
 }

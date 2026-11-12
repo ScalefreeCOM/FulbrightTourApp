@@ -1,5 +1,4 @@
 import SwiftUI
-import AppKit
 import StudyToursCore
 
 // MARK: - Overview
@@ -422,7 +421,7 @@ struct SubmissionTools: View {
 
     var body: some View {
         Card(title: "Attendee lists for host organizations") {
-            Text("For each confirmed visit: the host's Excel form attached to the Opportunity is filled with the attending members, reviewed here and sent via Gmail to the Opportunity's “Attendee List Recipient”. Gemini only sees the form's headers — never member data.")
+            Text("For each confirmed visit: the host's Excel form attached to the Opportunity is filled with the attending members, reviewed here and sent via Gmail to the Opportunity's “Attendee List Recipient”. The AI only sees the form's headers — never member data.")
                 .font(.caption).foregroundStyle(.secondary)
             HStack {
                 Text("\(state.participants.count) attending members loaded").font(.caption)
@@ -431,7 +430,14 @@ struct SubmissionTools: View {
                 Button("Reload visits") { state.loadHostVisits() }.disabled(!state.salesforceConnected)
             }
         }
+        #if os(macOS)
         ForEach(state.hostVisits.filter { !$0.isDeclined }) { v in HostListCard(visit: v) }
+        #else
+        Card(title: "Host forms") {
+            Label("Filling and sending the hosts' Excel forms is done in the Mac app.", systemImage: "desktopcomputer")
+                .foregroundStyle(.secondary)
+        }
+        #endif
         Card(title: "Logistics headcount") {
             let n = state.participants.count
             LabeledContent("Attending members", value: "\(n)")
@@ -442,6 +448,7 @@ struct SubmissionTools: View {
     }
 }
 
+#if os(macOS)
 struct HostListCard: View {
     @Environment(AppState.self) private var state
     let visit: HostVisit
@@ -497,7 +504,7 @@ struct HostListCard: View {
                 HStack {
                     Toggle("Show ID numbers in preview", isOn: $showIds).font(.caption)
                     Spacer()
-                    if let url = d.localURL { Button("Open filled form in Excel") { NSWorkspace.shared.open(url) } }
+                    if let url = d.localURL { Button("Open filled form in Excel") { Platform.open(url) } }
                 }
                 TextField("Subject", text: Binding(get: { d.subject }, set: { state.hostListDrafts[visit.id]?.subject = $0 }))
                 TextEditor(text: Binding(get: { d.body }, set: { state.hostListDrafts[visit.id]?.body = $0 }))
@@ -516,6 +523,7 @@ struct HostListCard: View {
         } message: { Text("The email is logged on the recipient and the Opportunity; each member gets a data-disclosure record.") }
     }
 }
+#endif
 
 // MARK: - 5 Tour days
 
@@ -610,7 +618,7 @@ struct ThankYouTools: View {
                             Spacer()
                             Button("Draft with Gemini") {
                                 state.run("Drafting…") { drafts[c.id] = try await state.draftThankYou(host: h, contact: c) }
-                            }.disabled(!state.gemini.isConfigured)
+                            }.disabled(!state.ai.isConfigured)
                             Button("Send via Gmail") { state.sendThankYou(host: h, contact: c, subject: subject, body: drafts[c.id] ?? "") }
                                 .disabled((drafts[c.id] ?? "").isEmpty)
                         }

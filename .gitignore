@@ -2,6 +2,8 @@
 .build/
 dist/
 *.xcodeproj/
+# iPad app icon is generated from the (unpublished) logos at build time
+iPad/Assets.xcassets/AppIcon.appiconset/AppIcon.png
 .DS_Store
 
 # organisation-specific configuration (see config/studytours.config.example.json)

@@ -106,6 +106,7 @@ public enum Keychain {
         public static let googleSecret = "google.clientSecret"
         public static let googleRefresh = "google.refreshToken"
         public static let geminiKey = "gemini.apiKey"
+        public static let claudeKey = "claude.apiKey"
     }
 }
 
