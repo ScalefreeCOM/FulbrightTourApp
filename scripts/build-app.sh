@@ -3,10 +3,13 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-APP="dist/Fulbright Study Tours.app"
+DEST="dist/Fulbright Study Tours.app"
 swift build -c release --product StudyTours
 
-rm -rf "$APP"
+# Assemble and sign outside the repo: if it lives in an iCloud-synced folder (e.g. ~/Documents),
+# File Provider keeps adding Finder info to the bundle and codesign rejects it.
+STAGE="$(mktemp -d)"
+APP="$STAGE/Fulbright Study Tours.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/Logos"
 cp "$(swift build -c release --show-bin-path)/StudyTours" "$APP/Contents/MacOS/StudyTours"
 cp Resources/Logos/* "$APP/Contents/Resources/Logos/" 2>/dev/null || true
@@ -57,7 +60,13 @@ PLIST
 # Sign with a stable identity so the Keychain recognises rebuilt apps ("Always Allow" sticks).
 # Override with SIGN_IDENTITY=…; falls back to the first Apple Development certificate, else ad-hoc
 # (ad-hoc builds get a new identity each time, so macOS asks for the Keychain password after every rebuild).
+# Strip extended attributes (quarantine, Finder info, …) copied in with the resources — codesign rejects them.
+xattr -cr "$APP"
 IDENTITY=${SIGN_IDENTITY:-$(security find-identity -v -p codesigning 2>/dev/null | awk '/Apple Development/ {print $2; exit}')}
 codesign --force --deep --sign "${IDENTITY:--}" "$APP"
 [[ -n "$IDENTITY" ]] || echo "Note: ad-hoc signed — the Keychain will ask again after each rebuild."
-echo "Built: $APP"
+mkdir -p dist
+rm -rf "$DEST"
+ditto --noextattr "$APP" "$DEST"
+rm -rf "$STAGE"
+echo "Built: $DEST"
